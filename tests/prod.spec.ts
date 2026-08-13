@@ -25,8 +25,8 @@ test('production build works end to end', async ({ page }) => {
   // Full workflow on the real bundle
   await page.goto(BASE)
   await page.getByRole('button', { name: 'Add Customer' }).first().click()
-  await page.getByLabel('Full Name').fill('Production Test')
-  await page.getByLabel('Phone Number').fill('9765432100')
+  await page.getByLabel('Name *').first().fill('Production Test')
+  await page.getByLabel('Phone *').first().fill('9765432100')
   await page.getByRole('button', { name: 'Create Customer' }).click()
   await expect(page.getByRole('heading', { name: 'Production Test', level: 1 })).toBeVisible({ timeout: 15000 })
 

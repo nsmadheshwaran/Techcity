@@ -48,8 +48,8 @@ test('editing a service with parts recalculates and persists correctly', async (
 
   // Customer
   await page.getByRole('button', { name: 'Add Customer' }).first().click()
-  await page.getByLabel('Full Name').fill('Edit Test Customer')
-  await page.getByLabel('Phone Number').fill('9812345670')
+  await page.getByLabel('Name *').first().fill('Edit Test Customer')
+  await page.getByLabel('Phone *').first().fill('9812345670')
   await page.getByRole('button', { name: 'Create Customer' }).click()
   await expect(page.getByRole('heading', { name: 'Edit Test Customer', level: 1 })).toBeVisible({ timeout: 15000 })
 
@@ -132,8 +132,8 @@ test('settings changes flow into generated PDFs (branding, terms, GST)', async (
 
   // This test runs in a fresh browser profile, so create its own customer.
   await page.getByRole('button', { name: 'Add Customer' }).first().click()
-  await page.getByLabel('Full Name').fill('PDF Settings Customer')
-  await page.getByLabel('Phone Number').fill('9812345670')
+  await page.getByLabel('Name *').first().fill('PDF Settings Customer')
+  await page.getByLabel('Phone *').first().fill('9812345670')
   await page.getByRole('button', { name: 'Create Customer' }).click()
   await expect(page.getByRole('heading', { name: 'PDF Settings Customer', level: 1 })).toBeVisible({
     timeout: 15000,

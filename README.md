@@ -30,6 +30,11 @@ Everything below is implemented and tested — there are no placeholder buttons.
 
 ---
 
+> **Deploying or setting up for the first time?**
+> See **[DEPLOYMENT.md](DEPLOYMENT.md)** for step-by-step instructions on running
+> the app after extracting the zip, deploying to Vercel, and the current status of
+> Supabase integration.
+
 ## 1. Quick start
 
 ```bash
@@ -80,6 +85,7 @@ npm run dev               # http://localhost:5173
 | `npm run build` | Type-check and build to `dist/` |
 | `npm run preview` | Serve the production build locally |
 | `npm run lint` | Run oxlint |
+| `npm run test:setup` | Download the Chromium test browser (run once before testing) |
 | `npm test` | Run the full Playwright suite (starts the dev server automatically) |
 | `npm run test:prod` | Build, serve `dist/` and smoke-test the production bundle |
 | `npm run test:all` | Both of the above |
@@ -232,6 +238,8 @@ techcity/
 ├── playwright.config.ts           E2E config (dev server, port 5173)
 ├── playwright.prod.config.ts      E2E config (built bundle, port 4173)
 ├── .env.example                   Documented environment variables
+├── DEPLOYMENT.md                  Setup, Vercel deployment, Supabase status
+├── vercel.json                    Vercel build configuration
 ├── supabase/
 │   └── schema.sql                 PostgreSQL schema + RLS policies + triggers
 ├── public/
@@ -326,7 +334,10 @@ techcity/
 - Quick Actions: Add Customer, New Service, Generate Report, Search Customer
 
 ### Customers
-- Fields: Customer ID, Name, Phone, Alternate Phone, Email, Address, City, Pincode, Notes, Date Added
+- **Multiple contacts per customer** — add as many people as you need (owner, manager, accountant…), each with their name, phone and role. The first contact is the primary one.
+- Fields: Customer ID, Contacts, Phone, Alternate Phone, Email, **GST Number**, Address, City, Pincode, **Equipment Password** (masked, reveal with the eye icon), Notes, Date Added
+- **Download full customer history** as a professional PDF — one button on the profile page
+- **Monthly report** — pick any month and see every service for that customer with totals
 - Auto-generated non-duplicating IDs: `TC-CUS-00001`, `TC-CUS-00002`, …
 - Duplicate phone-number detection (checks both phone fields)
 - Search by name, phone, customer ID, email or city — instant, in-memory
@@ -348,7 +359,7 @@ techcity/
   `Balance = Total − Amount Paid`, and Payment Status derived automatically
 - Itemised parts list (name / qty / rate) stored as proper `service_parts` rows;
   the parts total auto-fills Parts Cost
-- 16 predefined service types **plus custom types** (editable in Settings)
+- 20 predefined service types **plus custom types** (editable in Settings) — now includes **AMC Site Visit, RMA, Installation, Monitoring Service**
 - 8 statuses with distinct colour coding: Received, Diagnosis, In Progress,
   Waiting for Parts, Ready, Delivered, Completed, Cancelled
 - Warranty expiry auto-calculated from text like "1 Year", "6 Months", "15 Days"
@@ -439,7 +450,15 @@ Customer arrives
 ## 11. Testing
 
 The application was tested in a real Chromium browser, not by inspection.
-Playwright starts the servers itself, so a single command runs everything:
+
+**First time only** — download the browser Playwright drives (~650 MB, installed to
+your user folder rather than the project, which is why it isn't in the zip):
+
+```bash
+npm run test:setup
+```
+
+After that, one command runs everything — Playwright starts the servers itself:
 
 ```bash
 npm run test:all     # dev-server suite + production-bundle smoke test

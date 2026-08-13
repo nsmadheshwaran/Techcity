@@ -654,6 +654,7 @@ export async function seedDemoData(): Promise<{ customers: number; services: num
         serviceDate: s.date,
         serviceType: s.type,
         status: s.status,
+        serviceMode: 'Offline',
         product: s.product,
         brand: s.brand,
         model: s.model,

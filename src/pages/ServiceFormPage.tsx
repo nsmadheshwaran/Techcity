@@ -22,8 +22,10 @@ import {
 } from '@/services/services'
 import {
   PAYMENT_METHODS,
+  SERVICE_MODES,
   SERVICE_STATUSES,
   type PaymentMethod,
+  type ServiceMode,
   type ServiceStatus,
 } from '@/types'
 import { formatMoney, todayISO, warrantyExpiryFrom } from '@/utils/format'
@@ -59,6 +61,7 @@ interface FormState {
   serviceDate: string
   serviceType: string
   status: ServiceStatus
+  serviceMode: ServiceMode
   product: string
   brand: string
   model: string
@@ -95,6 +98,7 @@ export default function ServiceFormPage() {
     serviceDate: todayISO(),
     serviceType: '',
     status: 'Received',
+    serviceMode: 'Offline',
     product: '',
     brand: '',
     model: '',
@@ -143,6 +147,7 @@ export default function ServiceFormPage() {
       serviceDate: existing.serviceDate,
       serviceType: existing.serviceType,
       status: existing.status,
+      serviceMode: existing.serviceMode ?? 'Offline',
       product: existing.product ?? '',
       brand: existing.brand ?? '',
       model: existing.model ?? '',
@@ -237,6 +242,7 @@ export default function ServiceFormPage() {
         serviceDate: form.serviceDate,
         serviceType: form.serviceType.trim(),
         status,
+        serviceMode: form.serviceMode,
         product: form.product.trim() || undefined,
         brand: form.brand.trim() || undefined,
         model: form.model.trim() || undefined,
@@ -339,6 +345,13 @@ export default function ServiceFormPage() {
                 value={form.status}
                 onChange={(e) => set('status', e.target.value as ServiceStatus)}
                 options={SERVICE_STATUSES}
+              />
+              <SelectField
+                label="Service Mode"
+                value={form.serviceMode}
+                onChange={(e) => set('serviceMode', e.target.value as ServiceMode)}
+                options={SERVICE_MODES}
+                hint="On-site or remote"
               />
               <ComboField
                 label="Technician"

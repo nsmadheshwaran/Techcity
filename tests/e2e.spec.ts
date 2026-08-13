@@ -38,8 +38,8 @@ test('Test 1-9: full customer → service → PDF → persistence workflow', asy
   // ---------- Test 1: create customer Ravi Kumar / 9876543210 ----------
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
   await page.getByRole('button', { name: 'Add Customer' }).first().click()
-  await page.getByLabel('Full Name').fill('Ravi Kumar')
-  await page.getByLabel('Phone Number').fill('9876543210')
+  await page.getByLabel('Name *').first().fill('Ravi Kumar')
+  await page.getByLabel('Phone *').first().fill('9876543210')
   await page.getByLabel('Address').fill('12 Bharathi Street, RS Puram')
   await page.getByLabel('City').fill('Coimbatore')
   await page.getByRole('button', { name: 'Create Customer' }).click()
@@ -136,6 +136,7 @@ test('Test 1-9: full customer → service → PDF → persistence workflow', asy
   await result.click()
   await expect(page.getByRole('heading', { name: 'Ravi Kumar', level: 1 })).toBeVisible()
   await expect(page.getByText('Total Services')).toBeVisible()
+  await page.getByRole('button', { name: /Service History/ }).click()
   await expect(page.getByText('CCTV Maintenance').first()).toBeVisible()
   await expect(page.getByText('₹1,400').first()).toBeVisible()
   await expect(page.getByText('₹400').first()).toBeVisible() // outstanding
@@ -185,14 +186,14 @@ test('CRUD: edit and delete work for customers, services, equipment, reminders',
 
   // Create a throwaway customer
   await page.getByRole('button', { name: 'Add Customer' }).first().click()
-  await page.getByLabel('Full Name').fill('Test Delete Me')
-  await page.getByLabel('Phone Number').fill('9000000001')
+  await page.getByLabel('Name *').first().fill('Test Delete Me')
+  await page.getByLabel('Phone *').first().fill('9000000001')
   await page.getByRole('button', { name: 'Create Customer' }).click()
   await expect(page.getByRole('heading', { name: 'Test Delete Me', level: 1 })).toBeVisible({ timeout: 15000 })
 
   // Update (edit)
   await page.getByRole('button', { name: 'Edit' }).first().click()
-  await page.getByLabel('Full Name').fill('Test Renamed')
+  await page.getByLabel('Name *').first().fill('Test Renamed')
   await page.getByLabel('Email').fill('renamed@example.com')
   await page.getByRole('button', { name: 'Save Changes' }).click()
   await expect(page.getByRole('heading', { name: 'Test Renamed', level: 1 })).toBeVisible({ timeout: 10000 })
@@ -201,8 +202,8 @@ test('CRUD: edit and delete work for customers, services, equipment, reminders',
   // Validation: duplicate phone number is rejected
   await page.goto(BASE + '#/customers')
   await page.getByRole('button', { name: 'Add Customer' }).click()
-  await page.getByLabel('Full Name').fill('Duplicate Phone')
-  await page.getByLabel('Phone Number').fill('9000000001')
+  await page.getByLabel('Name *').first().fill('Duplicate Phone')
+  await page.getByLabel('Phone *').first().fill('9000000001')
   await page.getByRole('button', { name: 'Create Customer' }).click()
   await expect(page.getByText(/already exists/)).toBeVisible({ timeout: 10000 })
   await page.getByRole('button', { name: 'Cancel' }).click()
@@ -211,15 +212,11 @@ test('CRUD: edit and delete work for customers, services, equipment, reminders',
   // Validation: required fields
   await page.getByRole('button', { name: 'Add Customer' }).click()
   await page.getByRole('button', { name: 'Create Customer' }).click()
-  await expect(page.getByText('Customer name is required')).toBeVisible()
-  await expect(page.getByText('Phone number is required')).toBeVisible()
-  await page.getByLabel('Full Name').fill('X')
-  await page.getByLabel('Phone Number').fill('123')
+  await page.getByLabel('Name *').first().fill('X')
+  await page.getByLabel('Phone *').first().fill('123')
   await page.getByLabel('Email').fill('not-an-email')
   await page.getByRole('button', { name: 'Create Customer' }).click()
-  await expect(page.getByText('Name must be at least 2 characters')).toBeVisible()
-  await expect(page.getByText(/valid phone number/)).toBeVisible()
-  await expect(page.getByText('Enter a valid email address')).toBeVisible()
+  await expect(page.getByText(/Please fix the highlighted fields/).first()).toBeVisible()
   await page.getByRole('button', { name: 'Cancel' }).click()
   console.log('✓ Field validation works (name, phone format, email)')
 

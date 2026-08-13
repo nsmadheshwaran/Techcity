@@ -366,3 +366,68 @@ from public.reminders r
 join public.customers c on c.id = r.customer_id
 where r.done = false
 order by r.due_date;
+
+-- =====================================================================
+--  v3 additions (contacts table + customer/service columns)
+-- =====================================================================
+
+create table if not exists public.customer_contacts (
+  id            uuid primary key default gen_random_uuid(),
+  owner_id      uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  customer_id   uuid not null references public.customers (id) on delete cascade,
+  position      integer not null default 0,
+  name          text not null,
+  phone         text not null,
+  role          text,
+  is_demo       boolean not null default false,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+
+create index if not exists customer_contacts_customer_idx on public.customer_contacts (customer_id);
+create index if not exists customer_contacts_position_idx on public.customer_contacts (customer_id, position);
+
+-- Add new columns to customers (idempotent)
+do $$
+begin
+  if not exists (select 1 from information_schema.columns where table_name='customers' and column_name='gst_number') then
+    alter table public.customers add column gst_number text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='customers' and column_name='password') then
+    alter table public.customers add column password text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='services' and column_name='service_mode') then
+    alter table public.services add column service_mode text not null default 'Offline'
+      check (service_mode in ('Offline','Online'));
+  end if;
+end $$;
+
+-- RLS for contacts
+alter table public.customer_contacts enable row level security;
+
+drop policy if exists "customer_contacts_owner_all" on public.customer_contacts;
+create policy "customer_contacts_owner_all" on public.customer_contacts
+  for all to authenticated
+  using      (owner_id = auth.uid())
+  with check  (owner_id = auth.uid());
+
+-- Extend the reporting view
+create or replace view public.customer_summary as
+select
+  c.id,
+  c.owner_id,
+  c.code,
+  c.name,
+  c.phone,
+  c.gst_number,
+  count(s.id)                                      as total_services,
+  coalesce(sum(s.total_amount), 0)                 as total_spent,
+  coalesce(sum(s.amount_paid), 0)                  as total_paid,
+  greatest(0, coalesce(sum(s.balance), 0))         as outstanding,
+  max(s.service_date)                              as last_service_date,
+  min(s.next_service_date) filter (where s.next_service_date >= current_date)
+                                                   as next_service_date
+from public.customers c
+left join public.services s
+       on s.customer_id = c.id and s.status <> 'Cancelled'
+group by c.id;

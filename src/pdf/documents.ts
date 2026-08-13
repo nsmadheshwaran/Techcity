@@ -40,6 +40,7 @@ const TITLES: Record<DocKind, string> = {
   report: 'SERVICE REPORT',
   invoice: 'TAX INVOICE',
   receipt: 'PAYMENT RECEIPT',
+  history: 'CUSTOMER HISTORY',
 }
 
 /** jsPDF's built-in fonts are Latin-1 only — ₹ renders as a blank box, so use "Rs." */
@@ -278,14 +279,16 @@ export function buildDocument(input: DocInput): jsPDF {
 
   /* Customer + service summary */
   y = sectionTitle(doc, kind === 'invoice' ? 'Bill To' : 'Customer Details', y)
-  y = infoPanel(doc, y, [
+  const customerRows: [string, string][] = [
     ['Name', customer.name],
     ['Customer ID', customer.code],
     ['Phone', [customer.phone, customer.altPhone].filter(Boolean).join(' / ')],
     ['Email', customer.email ?? ''],
-    ['Address', [customer.address, customer.city].filter(Boolean).join(', ')],
-    ['Pincode', customer.pincode ?? ''],
-  ])
+  ]
+  if (customer.gstNumber) customerRows.push(['GST Number', customer.gstNumber])
+  customerRows.push(['Address', [customer.address, customer.city].filter(Boolean).join(', ')])
+  customerRows.push(['Pincode', customer.pincode ?? ''])
+  y = infoPanel(doc, y, customerRows)
 
   y = pageBreakIfNeeded(doc, y, 45)
   y = sectionTitle(doc, 'Service Details', y)
@@ -294,6 +297,7 @@ export function buildDocument(input: DocInput): jsPDF {
     ['Service Date', formatDateLong(service.serviceDate)],
     ['Service Type', service.serviceType],
     ['Status', service.status],
+    ['Service Mode', service.serviceMode],
     ['Device / Product', service.product ?? ''],
     ['Brand', service.brand ?? ''],
     ['Model', service.model ?? ''],

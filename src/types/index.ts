@@ -27,8 +27,31 @@ export interface Customer extends BaseRow {
   address?: string
   city?: string
   pincode?: string
+  /** GST / tax registration number for this customer. */
+  gstNumber?: string
+  /**
+   * Password for installed equipment (camera/DVR/network). Stored in plain
+   * text because the business needs to view it on demand — this is a local,
+   * single-device app with a passcode lock, not a multi-user web service.
+   */
+  password?: string
   notes?: string
   dateAdded: string // yyyy-mm-dd
+}
+
+/**
+ * A person associated with a customer (owner, manager, technician contact…).
+ * A customer can have any number of contacts; the primary one is typically
+ * listed first. Stored in its own table so the list is fully dynamic.
+ */
+export interface CustomerContact extends BaseRow {
+  customerId: ID
+  /** Preserves the order the user added the contacts in. */
+  position: number
+  name: string
+  phone: string
+  /** Optional label — e.g. "Owner", "Manager", "Accountant". */
+  role?: string
 }
 
 /* ------------------------------------------------------------------ */
@@ -53,12 +76,18 @@ export type PaymentStatus = (typeof PAYMENT_STATUSES)[number]
 export const PAYMENT_METHODS = ['Cash', 'UPI', 'Bank Transfer', 'Card', 'Other'] as const
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number]
 
+/** Whether the service was performed on-site or remotely. */
+export const SERVICE_MODES = ['Offline', 'Online'] as const
+export type ServiceMode = (typeof SERVICE_MODES)[number]
+
 export interface Service extends BaseRow {
   code: string // TC-SRV-00001
   customerId: ID
   serviceDate: string // yyyy-mm-dd
   serviceType: string
   status: ServiceStatus
+  /** On-site (Offline) or remote/online service. */
+  serviceMode: ServiceMode
 
   // device
   product?: string
@@ -206,4 +235,4 @@ export interface ServiceWithCustomer extends Service {
   customer?: Customer
 }
 
-export type DocKind = 'report' | 'invoice' | 'receipt'
+export type DocKind = 'report' | 'invoice' | 'receipt' | 'history'

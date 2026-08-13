@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "lint": "oxlint",
     "typecheck": "tsc -b",
+    "test:setup": "playwright install chromium",
     "test": "playwright test",
     "test:e2e": "playwright test tests/e2e.spec.ts",
     "test:responsive": "playwright test tests/responsive.spec.ts",

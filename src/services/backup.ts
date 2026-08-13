@@ -1,4 +1,5 @@
 import { db, getSettings, sortParts } from '@/lib/db'
+import type { CustomerContact } from '@/types'
 import type { Customer, Equipment, Payment, Reminder, Service, ServicePart } from '@/types'
 import { downloadCSV, downloadJSON, timestampSuffix } from '@/utils/csv'
 
@@ -13,13 +14,14 @@ export interface BackupFile {
     payments: Payment[]
     equipment: Equipment[]
     reminders: Reminder[]
+    customerContacts: CustomerContact[]
     settings: unknown[]
     counters: { key: string; value: number }[]
   }
 }
 
 export async function buildBackup(): Promise<BackupFile> {
-  const [customers, services, serviceParts, payments, equipment, reminders, settings, counters] =
+  const [customers, services, serviceParts, payments, equipment, reminders, customerContacts, settings, counters] =
     await Promise.all([
       db.customers.toArray(),
       db.services.toArray(),
@@ -27,6 +29,7 @@ export async function buildBackup(): Promise<BackupFile> {
       db.payments.toArray(),
       db.equipment.toArray(),
       db.reminders.toArray(),
+      db.customerContacts.toArray(),
       db.settings.toArray(),
       db.counters.toArray(),
     ])
@@ -34,7 +37,7 @@ export async function buildBackup(): Promise<BackupFile> {
     app: 'tech-city-technology',
     version: 1,
     exportedAt: new Date().toISOString(),
-    data: { customers, services, serviceParts, payments, equipment, reminders, settings, counters },
+    data: { customers, services, serviceParts, payments, equipment, reminders, customerContacts, settings, counters },
   }
 }
 
@@ -65,6 +68,7 @@ export async function restoreBackup(raw: string) {
       db.payments,
       db.equipment,
       db.reminders,
+      db.customerContacts,
       db.settings,
       db.counters,
     ],
@@ -76,6 +80,7 @@ export async function restoreBackup(raw: string) {
         db.payments.clear(),
         db.equipment.clear(),
         db.reminders.clear(),
+        db.customerContacts.clear(),
         db.counters.clear(),
       ])
       if (d.customers?.length) await db.customers.bulkAdd(d.customers)
@@ -84,6 +89,7 @@ export async function restoreBackup(raw: string) {
       if (d.payments?.length) await db.payments.bulkAdd(d.payments)
       if (d.equipment?.length) await db.equipment.bulkAdd(d.equipment)
       if (d.reminders?.length) await db.reminders.bulkAdd(d.reminders)
+      if (d.customerContacts?.length) await db.customerContacts.bulkAdd(d.customerContacts)
       if (d.counters?.length) await db.counters.bulkAdd(d.counters)
       if (d.settings?.length)
         await db.settings.bulkPut(d.settings as Awaited<ReturnType<typeof getSettings>>[])
@@ -108,6 +114,7 @@ export async function exportCustomersCSV() {
       Phone: c.phone,
       'Alternate Phone': c.altPhone ?? '',
       Email: c.email ?? '',
+      'GST Number': c.gstNumber ?? '',
       Address: c.address ?? '',
       City: c.city ?? '',
       Pincode: c.pincode ?? '',
@@ -143,6 +150,7 @@ export async function exportServicesCSV() {
         Phone: c?.phone ?? '',
         'Service Type': s.serviceType,
         Status: s.status,
+        'Service Mode': s.serviceMode ?? 'Offline',
         Product: s.product ?? '',
         Brand: s.brand ?? '',
         Model: s.model ?? '',

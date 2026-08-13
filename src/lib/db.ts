@@ -3,6 +3,7 @@ import type {
   AppUser,
   BusinessSettings,
   Customer,
+  CustomerContact,
   Equipment,
   Payment,
   Reminder,
@@ -26,6 +27,7 @@ import type {
  */
 export class TechCityDB extends Dexie {
   customers!: Table<Customer, string>
+  customerContacts!: Table<CustomerContact, string>
   services!: Table<Service, string>
   serviceParts!: Table<ServicePart, string>
   payments!: Table<Payment, string>
@@ -55,6 +57,17 @@ export class TechCityDB extends Dexie {
     // rows are backfilled by backfillPartPositions() after the database opens
     // (writes inside a Dexie upgrade transaction are not reliably persisted).
     this.version(2).stores({ serviceParts: 'id, serviceId, position, createdAt' })
+
+    // v3 — customers gained a `customer_contacts` table (multiple people per
+    // customer), plus `gstNumber` and `password` columns on the customer row,
+    // and `serviceMode` on services. Only the contacts table is new; the extra
+    // columns are additive and need no row backfill (undefined = not set).
+    this.version(3).stores({
+      customers: 'id, code, name, phone, altPhone, email, city, gstNumber, dateAdded, createdAt, isDemo',
+      services:
+        'id, code, customerId, serviceDate, serviceType, status, serviceMode, paymentStatus, nextServiceDate, warrantyExpiry, createdAt, isDemo',
+      customerContacts: 'id, customerId, position, createdAt',
+    })
   }
 }
 
@@ -66,6 +79,19 @@ export const db = new TechCityDB()
  * existed, so line items never appear shuffled.
  */
 export function sortParts<T extends { position?: number; createdAt?: string }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => {
+    const ap = a.position ?? Number.MAX_SAFE_INTEGER
+    const bp = b.position ?? Number.MAX_SAFE_INTEGER
+    if (ap !== bp) return ap - bp
+    return (a.createdAt ?? '').localeCompare(b.createdAt ?? '')
+  })
+}
+
+/**
+ * Orders customer contacts the way the user added them.
+ * Falls back to createdAt for rows written before the `position` column existed.
+ */
+export function sortContacts<T extends { position?: number; createdAt?: string }>(rows: T[]): T[] {
   return [...rows].sort((a, b) => {
     const ap = a.position ?? Number.MAX_SAFE_INTEGER
     const bp = b.position ?? Number.MAX_SAFE_INTEGER
@@ -145,6 +171,10 @@ export const DEFAULT_SERVICE_TYPES = [
   'Printer Service',
   'Computer Sales',
   'CCTV Sales',
+  'AMC Site Visit',
+  'RMA',
+  'Installation',
+  'Monitoring Service',
   'Other',
 ]
 

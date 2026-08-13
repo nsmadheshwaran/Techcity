@@ -3,7 +3,11 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   CalendarClock,
   CreditCard,
+  Download,
+  Eye,
+  EyeOff,
   HardDrive,
+  Lock,
   Mail,
   MapPin,
   MessageCircle,
@@ -23,14 +27,25 @@ import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useToast } from '@/components/ui/Toast'
 import {
   useCustomer,
+  useCustomerContacts,
   useCustomerServices,
   useEquipment,
+  usePayments,
   useReminders,
   useSettings,
 } from '@/hooks/useData'
 import { computeStats, deleteCustomer } from '@/services/customers'
 import { deleteEquipment } from '@/services/equipment'
-import { formatDate, formatDateLong, formatMoney, initials, toWhatsAppNumber } from '@/utils/format'
+import { buildDocument } from '@/pdf/documents'
+import {
+  formatDate,
+  formatDateLong,
+  formatMoney,
+  initials,
+  monthKey,
+  monthLabel,
+  toWhatsAppNumber,
+} from '@/utils/format'
 
 export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -38,15 +53,35 @@ export default function CustomerDetailPage() {
   const toast = useToast()
   const confirm = useConfirm()
   const customer = useCustomer(id)
+  const contacts = useCustomerContacts(id)
   const services = useCustomerServices(id)
   const equipment = useEquipment(id)
   const reminders = useReminders(id)
+  const payments = usePayments({ customerId: id })
   const settings = useSettings()
   const [editOpen, setEditOpen] = useState(false)
   const [equipmentOpen, setEquipmentOpen] = useState(false)
-  const [tab, setTab] = useState<'history' | 'timeline' | 'equipment' | 'reminders'>('history')
+  const [tab, setTab] = useState<'contacts' | 'history' | 'timeline' | 'equipment' | 'reminders'>('contacts')
+  const [showPassword, setShowPassword] = useState(false)
+  const [reportMonth, setReportMonth] = useState(monthKey())
 
   const stats = useMemo(() => computeStats(services ?? []), [services])
+
+  const monthlyServices = useMemo(() => {
+    return (services ?? []).filter((s) => monthKey(s.serviceDate) === reportMonth)
+  }, [services, reportMonth])
+
+  const monthlyTotal = useMemo(
+    () => monthlyServices.reduce((sum, s) => (s.status === 'Cancelled' ? sum : sum + s.totalAmount), 0),
+    [monthlyServices],
+  )
+
+  const monthlyMonths = useMemo(() => {
+    const set = new Set<string>()
+    set.add(monthKey())
+    for (const s of services ?? []) set.add(monthKey(s.serviceDate))
+    return [...set].sort().reverse()
+  }, [services])
 
   if (customer === undefined) return <LoadingState label="Loading customer…" />
   if (customer === null || !customer)
@@ -105,7 +140,44 @@ export default function CustomerDetailPage() {
     }
   }
 
+  async function downloadHistory() {
+    if (!customer) return
+    try {
+      const custPayments = payments ?? []
+      const doc = buildDocument({
+        kind: 'history',
+        service: {
+          ...({
+            code: customer.code,
+            serviceDate: customer.dateAdded,
+            serviceType: 'Customer History',
+            status: 'Completed',
+            serviceMode: 'Offline',
+            complaint: '',
+            serviceCharge: 0,
+            partsCost: 0,
+            discount: 0,
+            taxPercent: 0,
+            totalAmount: stats.totalSpent,
+            amountPaid: stats.totalPaid,
+            balance: stats.outstanding,
+            paymentStatus: 'Paid',
+          } as any),
+        } as any,
+        customer,
+        parts: [],
+        payments: custPayments,
+        settings,
+      })
+      doc.save(`CustomerHistory-${customer.code}-${customer.name.replace(/[^a-zA-Z0-9]+/g, '-')}.pdf`)
+      toast.success('History downloaded', `Full history for ${customer.name}`)
+    } catch (err) {
+      toast.error('Download failed', err instanceof Error ? err.message : 'Could not generate PDF.')
+    }
+  }
+
   const waNumber = toWhatsAppNumber(customer.phone)
+  const primaryContacts = contacts ?? []
 
   return (
     <>
@@ -115,6 +187,9 @@ export default function CustomerDetailPage() {
         subtitle={`${customer.code} · Customer since ${formatDate(customer.dateAdded)}`}
         actions={
           <>
+            <button className="btn-secondary" onClick={downloadHistory} disabled={!services?.length}>
+              <Download size={15} /> <span className="hidden sm:inline">History</span>
+            </button>
             <button className="btn-secondary" onClick={() => setEditOpen(true)}>
               <Pencil size={15} /> <span className="hidden sm:inline">Edit</span>
             </button>
@@ -164,11 +239,36 @@ export default function CustomerDetailPage() {
                   </dd>
                 </div>
               )}
+              {customer.gstNumber && (
+                <div className="flex items-start gap-2.5">
+                  <span className="mt-0.5 shrink-0 text-ink-400">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8" /><path d="M12 17v4" /></svg>
+                  </span>
+                  <dd className="text-ink-700">GST: {customer.gstNumber}</dd>
+                </div>
+              )}
               {(customer.address || customer.city) && (
                 <div className="flex items-start gap-2.5">
                   <MapPin size={15} className="mt-0.5 shrink-0 text-ink-400" />
                   <dd className="text-ink-700">
                     {[customer.address, customer.city, customer.pincode].filter(Boolean).join(', ')}
+                  </dd>
+                </div>
+              )}
+              {customer.password && (
+                <div className="flex items-start gap-2.5">
+                  <Lock size={15} className="mt-0.5 shrink-0 text-ink-400" />
+                  <dd className="flex items-center gap-2">
+                    <code className="rounded bg-ink-100 px-1.5 py-0.5 text-[12px] text-ink-700">
+                      {showPassword ? customer.password : '••••••••'}
+                    </code>
+                    <button
+                      onClick={() => setShowPassword((s) => !s)}
+                      className="rounded p-1 text-ink-400 hover:bg-ink-100 hover:text-ink-700"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
                   </dd>
                 </div>
               )}
@@ -225,6 +325,66 @@ export default function CustomerDetailPage() {
               />
             </dl>
           </section>
+
+          {/* Monthly report */}
+          <section className="card">
+            <div className="flex items-center justify-between border-b border-ink-200 px-4 py-3">
+              <h3 className="text-[15px] font-semibold text-ink-900">Monthly Report</h3>
+              <select
+                className="input w-auto py-1.5 text-[13px]"
+                value={reportMonth}
+                onChange={(e) => setReportMonth(e.target.value)}
+                aria-label="Select month"
+              >
+                {monthlyMonths.map((m) => (
+                  <option key={m} value={m}>
+                    {monthLabel(m)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {monthlyServices.length === 0 ? (
+              <div className="px-4 py-6 text-center text-[13px] text-ink-500">
+                No services in {monthLabel(reportMonth)}.
+              </div>
+            ) : (
+              <>
+                <ul className="divide-y divide-ink-100">
+                  {monthlyServices.map((s) => (
+                    <li key={s.id}>
+                      <Link
+                        to={`/services/${s.id}`}
+                        className="flex items-center justify-between gap-3 px-4 py-2.5 transition-colors hover:bg-ink-50"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-[13.5px] font-medium text-ink-900">
+                            {s.serviceType}
+                          </p>
+                          <p className="text-[12px] text-ink-500">
+                            {formatDate(s.serviceDate)} · {s.serviceMode}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-[13.5px] font-semibold text-ink-900">
+                            {formatMoney(s.totalAmount, settings.currency)}
+                          </p>
+                          <StatusBadge status={s.status} />
+                        </div>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex items-center justify-between border-t border-ink-200 px-4 py-3">
+                  <span className="text-[13px] font-medium text-ink-600">
+                    {monthlyServices.length} service(s)
+                  </span>
+                  <span className="text-[15px] font-bold text-ink-900">
+                    {formatMoney(monthlyTotal, settings.currency)}
+                  </span>
+                </div>
+              </>
+            )}
+          </section>
         </div>
 
         {/* Right: tabs */}
@@ -233,6 +393,7 @@ export default function CustomerDetailPage() {
             <div className="flex overflow-x-auto border-b border-ink-200">
               {(
                 [
+                  ['contacts', `Contacts (${primaryContacts.length})`],
                   ['history', `Service History (${services?.length ?? 0})`],
                   ['timeline', 'Timeline'],
                   ['equipment', `Equipment (${equipment?.length ?? 0})`],
@@ -252,6 +413,50 @@ export default function CustomerDetailPage() {
                 </button>
               ))}
             </div>
+
+            {tab === 'contacts' && (
+              <>
+                {primaryContacts.length === 0 ? (
+                  <EmptyState
+                    icon={Phone}
+                    title="No contacts added"
+                    message="Add the owner, manager, and other people associated with this customer."
+                  />
+                ) : (
+                  <ul className="divide-y divide-ink-100">
+                    {primaryContacts.map((c) => (
+                      <li key={c.id} className="flex items-center gap-3 px-4 py-3">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[12px] font-semibold text-brand-700">
+                          {initials(c.name)}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[14px] font-semibold text-ink-900">
+                            {c.name}
+                            {c.role && (
+                              <span className="ml-2 rounded bg-ink-100 px-1.5 py-0.5 text-[11px] font-medium text-ink-600">
+                                {c.role}
+                              </span>
+                            )}
+                          </p>
+                          <a href={`tel:${c.phone}`} className="text-[13px] text-ink-600 hover:text-brand-700">
+                            {c.phone}
+                          </a>
+                        </div>
+                        <a
+                          href={`https://wa.me/${toWhatsAppNumber(c.phone)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn-ghost px-2 text-emerald-700 hover:bg-emerald-50"
+                          aria-label={`WhatsApp ${c.name}`}
+                        >
+                          <MessageCircle size={16} />
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
 
             {tab === 'history' &&
               (!services?.length ? (
@@ -280,6 +485,9 @@ export default function CustomerDetailPage() {
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                             <p className="text-[14px] font-semibold text-ink-900">{s.serviceType}</p>
                             <StatusBadge status={s.status} />
+                            <span className="badge border-ink-200 bg-ink-100 text-ink-600">
+                              {s.serviceMode}
+                            </span>
                           </div>
                           <p className="mt-0.5 truncate text-[12.5px] text-ink-500">
                             {formatDate(s.serviceDate)} · {s.code}

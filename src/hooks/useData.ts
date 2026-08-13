@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useMemo } from 'react'
-import { db, DEFAULT_SETTINGS, sortParts } from '@/lib/db'
-import type { Customer, CustomerWithStats, Service } from '@/types'
+import { db, DEFAULT_SETTINGS, sortContacts, sortParts } from '@/lib/db'
+import type { Customer, CustomerContact, CustomerWithStats, Service } from '@/types'
 import { computeStats } from '@/services/customers'
 
 /**
@@ -50,6 +50,13 @@ export function useCustomerServices(customerId?: string) {
     if (!customerId) return [] as Service[]
     const rows = await db.services.where('customerId').equals(customerId).toArray()
     return rows.sort((a, b) => b.serviceDate.localeCompare(a.serviceDate))
+  }, [customerId])
+}
+
+export function useCustomerContacts(customerId?: string) {
+  return useLiveQuery(async () => {
+    if (!customerId) return [] as CustomerContact[]
+    return sortContacts(await db.customerContacts.where('customerId').equals(customerId).toArray())
   }, [customerId])
 }
 

@@ -55,8 +55,9 @@ export async function updateCustomer(id: string, patch: Partial<Customer>): Prom
 export async function deleteCustomer(id: string) {
   await db.transaction(
     'rw',
-    [db.customers, db.services, db.serviceParts, db.payments, db.equipment, db.reminders],
+    [db.customers, db.customerContacts, db.services, db.serviceParts, db.payments, db.equipment, db.reminders],
     async () => {
+      await db.customerContacts.where('customerId').equals(id).delete()
       const services = await db.services.where('customerId').equals(id).toArray()
       const serviceIds = services.map((s) => s.id)
       for (const sid of serviceIds) {
