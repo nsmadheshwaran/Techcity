@@ -238,18 +238,33 @@ export interface AppUser {
 export const CALL_SOURCES = ['Online', 'Direct', 'Demo'] as const
 export type CallSource = (typeof CALL_SOURCES)[number]
 
-export const CALL_STATUSES = ['New', 'Follow Up', 'Completed', 'No Response'] as const
+export const CALL_STATUSES = ['Pending', 'In Progress', 'Completed', 'No Response'] as const
 export type CallStatus = (typeof CALL_STATUSES)[number]
 
-/** A logged enquiry / call — online enquiry, direct walk-in or a demo. */
+export const CALL_PRIORITIES = ['P1', 'P2', 'P3'] as const
+export type CallPriority = (typeof CALL_PRIORITIES)[number]
+
+/**
+ * A booked call / ticket (single-owner shop — no branches or employees).
+ * `name` is the customer / company name; `contactPerson` is the specific
+ * person spoken to. `appointmentDate` is the promised visit / follow-up date
+ * and auto-creates a reminder.
+ */
 export interface Call extends BaseRow {
-  date: string // yyyy-mm-dd
+  date: string // yyyy-mm-dd (booked date)
   source: CallSource
   status: CallStatus
   /** Linked saved customer (optional — the caller may be a new lead). */
   customerId?: ID
   name: string
   phone?: string
+  contactPerson?: string
+  /** What the call is about — free text with shop-style suggestions. */
+  issue?: string
+  /** Urgency flag (P1 most urgent) — optional. */
+  priority?: CallPriority
+  /** Promised visit / follow-up date (yyyy-mm-dd) → creates a reminder. */
+  appointmentDate?: string
   notes?: string
 }
 

@@ -28,7 +28,7 @@ const NAV = [
   { to: '/services', label: 'Services', icon: Wrench },
   { to: '/reports', label: 'Service Reports', icon: FileText },
   { to: '/equipment', label: 'Products / Equipment', icon: HardDrive },
-  { to: '/calls', label: 'Call Log', icon: PhoneCall },
+  { to: '/calls', label: 'Call Book', icon: PhoneCall },
   { to: '/quotations', label: 'Quotations', icon: ScrollText },
   { to: '/reminders', label: 'Reminders', icon: Bell },
   { to: '/payments', label: 'Payments', icon: CreditCard },

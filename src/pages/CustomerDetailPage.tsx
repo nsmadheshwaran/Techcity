@@ -720,6 +720,19 @@ export default function CustomerDetailPage() {
                           <span className="badge border-brand-100 bg-brand-50 text-brand-700">
                             {c.source}
                           </span>
+                          {c.priority && (
+                            <span
+                              className={`badge ${
+                                c.priority === 'P1'
+                                  ? 'border-red-200 bg-red-50 text-red-700'
+                                  : c.priority === 'P2'
+                                    ? 'border-amber-200 bg-amber-50 text-amber-700'
+                                    : 'border-sky-200 bg-sky-50 text-sky-700'
+                              }`}
+                            >
+                              {c.priority}
+                            </span>
+                          )}
                           <span className="badge border-ink-200 bg-ink-100 text-ink-600">
                             {c.status}
                           </span>
@@ -728,6 +741,11 @@ export default function CustomerDetailPage() {
                           {formatDate(c.date)}
                           {c.phone ? ` · ${c.phone}` : ''}
                         </p>
+                        {c.issue && (
+                          <p className="mt-1 rounded bg-ink-50 px-2 py-1 text-[12px] text-ink-700">
+                            {c.issue}
+                          </p>
+                        )}
                         {c.notes && (
                           <p className="mt-1 text-[12.5px] leading-relaxed text-ink-600">{c.notes}</p>
                         )}
