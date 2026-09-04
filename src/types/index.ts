@@ -137,8 +137,15 @@ export interface ServicePart extends BaseRow {
   position: number
   name: string
   quantity: number
+  /** The price charged to the customer per unit. */
   unitPrice: number
   total: number
+  /**
+   * Internal cost price per unit — what the shop paid the supplier. Only the
+   * owner sees it (customer documents never print it); it powers the
+   * buy-vs-sell profit shown on the service record and customer profile.
+   */
+  costPrice?: number
 }
 
 /** Individual payment transaction against a service (payments table) */

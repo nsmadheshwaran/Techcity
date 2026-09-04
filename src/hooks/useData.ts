@@ -1,7 +1,14 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useMemo } from 'react'
 import { db, DEFAULT_SETTINGS, sortContacts, sortParts } from '@/lib/db'
-import type { Customer, CustomerContact, CustomerWithStats, Quotation, Service } from '@/types'
+import type {
+  Customer,
+  CustomerContact,
+  CustomerWithStats,
+  Quotation,
+  Service,
+  ServicePart,
+} from '@/types'
 import { computeStats } from '@/services/customers'
 
 /**
@@ -113,6 +120,30 @@ export function useQuotations() {
 
 export function useQuotation(id?: string) {
   return useLiveQuery(async () => (id ? db.quotations.get(id) : undefined), [id])
+}
+
+/**
+ * Parts for a set of services, keyed by service id — used to roll up the
+ * shop's internal buy-vs-sell profit per customer.
+ */
+export function useServicePartsForServiceIds(
+  serviceIds: string[],
+): Map<string, ServicePart[]> | undefined {
+  const key = serviceIds.join('|')
+  return useLiveQuery(async () => {
+    const ids = key ? key.split('|') : []
+    if (!ids.length) return new Map<string, ServicePart[]>()
+    const rows = await db.serviceParts.where('serviceId').anyOf(ids).toArray()
+    const map = new Map<string, ServicePart[]>()
+    for (const r of rows) {
+      const list = map.get(r.serviceId)
+      if (list) list.push(r)
+      else map.set(r.serviceId, [r])
+    }
+    // Preserve entry order within each service.
+    for (const list of map.values()) sortParts(list)
+    return map
+  }, [key])
 }
 
 /** Quotations joined with their customer for list views. */

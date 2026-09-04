@@ -181,6 +181,7 @@ export default function ServiceFormPage() {
         name: p.name,
         quantity: p.quantity,
         unitPrice: p.unitPrice,
+        costPrice: p.costPrice,
       })),
     )
   }, [isEdit, existingParts])

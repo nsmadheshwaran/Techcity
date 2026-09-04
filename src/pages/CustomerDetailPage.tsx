@@ -34,6 +34,7 @@ import {
   useEquipment,
   usePayments,
   useReminders,
+  useServicePartsForServiceIds,
   useSettings,
 } from '@/hooks/useData'
 import { computeStats, deleteCustomer } from '@/services/customers'
@@ -62,6 +63,7 @@ export default function CustomerDetailPage() {
   const calls = useCalls(id)
   const payments = usePayments({ customerId: id })
   const settings = useSettings()
+  const servicePartMap = useServicePartsForServiceIds((services ?? []).map((s) => s.id))
   const [editOpen, setEditOpen] = useState(false)
   const [equipmentOpen, setEquipmentOpen] = useState(false)
   const [tab, setTab] = useState<
@@ -71,6 +73,51 @@ export default function CustomerDetailPage() {
   const [reportMonth, setReportMonth] = useState(monthKey())
 
   const stats = useMemo(() => computeStats(services ?? []), [services])
+
+  // Internal buy-vs-sell rollup: what the shop paid for parts sold/installed
+  // for this customer and the resulting profit. Only parts with an entered
+  // cost price are counted. `(internal)` figures are never on customer PDFs.
+  const marginStats = useMemo(() => {
+    const partsBy = servicePartMap ?? new Map()
+    let paid = 0
+    let profit = 0
+    let withCost = 0
+    let totalLines = 0
+    for (const s of services ?? []) {
+      for (const p of partsBy.get(s.id) ?? []) {
+        totalLines += 1
+        const c = Number(p.costPrice) || 0
+        const q = Number(p.quantity) || 1
+        if (c > 0) {
+          withCost += 1
+          paid += c * q
+          profit += ((Number(p.unitPrice) || 0) - c) * q
+        }
+      }
+    }
+    return { paid, profit, withCost, totalLines }
+  }, [services, servicePartMap])
+
+  const serviceMargins = useMemo(() => {
+    const partsBy = servicePartMap ?? new Map()
+    const map = new Map<string, { paid: number; profit: number }>()
+    for (const s of services ?? []) {
+      let paid = 0
+      let profit = 0
+      let hasCost = false
+      for (const p of partsBy.get(s.id) ?? []) {
+        const c = Number(p.costPrice) || 0
+        const q = Number(p.quantity) || 1
+        if (c > 0) {
+          hasCost = true
+          paid += c * q
+          profit += ((Number(p.unitPrice) || 0) - c) * q
+        }
+      }
+      if (hasCost) map.set(s.id, { paid, profit })
+    }
+    return map
+  }, [services, servicePartMap])
 
   const monthlyServices = useMemo(() => {
     return (services ?? []).filter((s) => monthKey(s.serviceDate) === reportMonth)
@@ -350,6 +397,33 @@ export default function CustomerDetailPage() {
                 value={stats.nextServiceDate ? formatDateLong(stats.nextServiceDate) : 'Not scheduled'}
                 tone={stats.nextServiceDate ? 'brand' : undefined}
               />
+              {marginStats.withCost > 0 && (
+                <>
+                  <SummaryRow
+                    label="You paid for parts (internal)"
+                    value={formatMoney(marginStats.paid, settings.currency)}
+                  />
+                  <SummaryRow
+                    label="Profit on parts (internal)"
+                    value={formatMoney(marginStats.profit, settings.currency)}
+                    tone={marginStats.profit >= 0 ? 'success' : 'danger'}
+                  />
+                  {marginStats.withCost < marginStats.totalLines && (
+                    <p className="flex items-center gap-1 border-t border-ink-100 px-4 py-2 text-[11px] leading-relaxed text-amber-600">
+                      <Lock size={10} className="shrink-0" />
+                      {marginStats.totalLines - marginStats.withCost} part{
+                        marginStats.totalLines - marginStats.withCost === 1 ? '' : 's'
+                      }{
+                        marginStats.totalLines - marginStats.withCost === 1
+                          ? ' has no cost price entered'
+                          : ' have no cost price entered'
+                      }{
+                        ' '}
+                      and is not counted.
+                    </p>
+                  )}
+                </>
+              )}
             </dl>
           </section>
 
@@ -523,6 +597,18 @@ export default function CustomerDetailPage() {
                             {s.brand ? ` ${s.brand}` : ''}
                           </p>
                           <p className="mt-1 line-clamp-1 text-[12.5px] text-ink-600">{s.complaint}</p>
+                          {(() => {
+                            const m = serviceMargins.get(s.id)
+                            return m ? (
+                              <p
+                                className="mt-1 inline-flex items-center gap-1 text-[11.5px] font-semibold text-emerald-700"
+                                title={`Bought for ${formatMoney(m.paid, settings.currency)}, charged ${formatMoney(s.totalAmount, settings.currency)}`}
+                              >
+                                <Lock size={9} />
+                                {formatMoney(m.profit, settings.currency)} profit (internal)
+                              </p>
+                            ) : null
+                          })()}
                         </div>
                         <div className="shrink-0 text-right">
                           <p className="text-[14px] font-semibold text-ink-900">

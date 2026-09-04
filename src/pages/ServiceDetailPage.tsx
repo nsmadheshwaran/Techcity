@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   CreditCard,
   FileText,
+  Lock,
   Pencil,
   Phone,
   Receipt,
@@ -25,7 +26,7 @@ import {
   useServiceParts,
   useSettings,
 } from '@/hooks/useData'
-import { deletePayment, deleteService, setServiceStatus } from '@/services/services'
+import { deletePayment, deleteService, round2, setServiceStatus } from '@/services/services'
 import { SERVICE_STATUSES, type DocKind, type ServiceStatus } from '@/types'
 import { formatDate, formatDateLong, formatMoney } from '@/utils/format'
 
@@ -53,6 +54,27 @@ export default function ServiceDetailPage() {
   }, [searchParams, setSearchParams])
 
   const partsTotal = useMemo(() => (parts ?? []).reduce((s, p) => s + p.total, 0), [parts])
+
+  // Buy-vs-sell figures for the internal margin block. Only parts with an
+  // entered cost price are counted, so older rows never skew the profit.
+  const margin = useMemo(() => {
+    const rows = parts ?? []
+    const lines: { name: string; qty: number; cost: number; charged: number; profit: number }[] = []
+    let costTotal = 0
+    let profit = 0
+    for (const p of rows) {
+      const c = Number(p.costPrice) || 0
+      const q = Number(p.quantity) || 1
+      const u = Number(p.unitPrice) || 0
+      if (c > 0) {
+        costTotal += c * q
+        const pr = round2((u - c) * q)
+        profit = round2(profit + pr)
+        lines.push({ name: p.name, qty: q, cost: round2(c * q), charged: round2(u * q), profit: pr })
+      }
+    }
+    return { lines, costTotal: round2(costTotal), profit, withCost: lines.length, total: rows.length }
+  }, [parts])
 
   if (service === undefined) return <LoadingState label="Loading service…" />
   if (!service)
@@ -252,40 +274,95 @@ export default function ServiceDetailPage() {
                 No itemised parts recorded for this service.
               </p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="border-b border-ink-200 bg-ink-50/60">
-                    <tr>
-                      <th className="table-th">Part</th>
-                      <th className="table-th text-center">Qty</th>
-                      <th className="table-th text-right">Rate</th>
-                      <th className="table-th text-right">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-ink-100">
-                    {parts.map((p) => (
-                      <tr key={p.id}>
-                        <td className="table-td">{p.name}</td>
-                        <td className="table-td text-center">{p.quantity}</td>
-                        <td className="table-td text-right">
-                          {formatMoney(p.unitPrice, settings.currency)}
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="border-b border-ink-200 bg-ink-50/60">
+                      <tr>
+                        <th className="table-th">Part</th>
+                        <th className="table-th text-center">Qty</th>
+                        <th className="table-th text-right">Rate</th>
+                        <th className="table-th text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-ink-100">
+                      {parts.map((p) => (
+                        <tr key={p.id}>
+                          <td className="table-td">{p.name}</td>
+                          <td className="table-td text-center">{p.quantity}</td>
+                          <td className="table-td text-right">
+                            {formatMoney(p.unitPrice, settings.currency)}
+                          </td>
+                          <td className="table-td text-right font-medium">
+                            {formatMoney(p.total, settings.currency)}
+                          </td>
+                        </tr>
+                      ))}
+                      <tr className="bg-ink-50/60">
+                        <td className="table-td font-semibold" colSpan={3}>
+                          Parts total
                         </td>
-                        <td className="table-td text-right font-medium">
-                          {formatMoney(p.total, settings.currency)}
+                        <td className="table-td text-right font-semibold">
+                          {formatMoney(partsTotal, settings.currency)}
                         </td>
                       </tr>
-                    ))}
-                    <tr className="bg-ink-50/60">
-                      <td className="table-td font-semibold" colSpan={3}>
-                        Parts total
-                      </td>
-                      <td className="table-td text-right font-semibold">
-                        {formatMoney(partsTotal, settings.currency)}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+                    </tbody>
+                  </table>
+                </div>
+
+                {margin.withCost > 0 ? (
+                  <div className="border-t border-amber-200 bg-amber-50/70 px-4 py-3">
+                    <p className="flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-wide text-amber-700">
+                      <Lock size={11} /> Internal — your cost & profit (never on the customer copy)
+                    </p>
+                    <ul className="mt-2 space-y-1 text-[12.5px]">
+                      {margin.lines.map((l, idx) => (
+                        <li key={idx} className="flex items-baseline justify-between gap-3">
+                          <span className="min-w-0 truncate text-ink-700">
+                            {l.name} <span className="text-ink-400">× {l.qty}</span>
+                          </span>
+                          <span className="shrink-0 text-ink-600">
+                            bought {formatMoney(l.cost, settings.currency)} · charged{' '}
+                            {formatMoney(l.charged, settings.currency)} ·{' '}
+                            <span
+                              className={`font-semibold ${
+                                l.profit >= 0 ? 'text-emerald-700' : 'text-red-600'
+                              }`}
+                            >
+                              profit {formatMoney(l.profit, settings.currency)}
+                            </span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-amber-200 pt-2 text-[13px]">
+                      <span className="font-medium text-ink-700">
+                        You paid {formatMoney(margin.costTotal, settings.currency)} → profit{' '}
+                        <span
+                          className={`font-bold ${
+                            margin.profit >= 0 ? 'text-emerald-700' : 'text-red-600'
+                          }`}
+                        >
+                          {formatMoney(margin.profit, settings.currency)}
+                        </span>
+                      </span>
+                      {margin.withCost < margin.total && (
+                        <span className="text-[11.5px] text-amber-600">
+                          {margin.total - margin.withCost} part{' '}
+                          {margin.total - margin.withCost === 1 ? 'line has' : 'lines have'} no cost
+                          price entered and is not counted.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="flex items-center gap-1.5 border-t border-ink-100 px-4 py-2.5 text-[12px] text-ink-400">
+                    <Lock size={11} className="text-amber-400" />
+                    Tip: enter each part's “my cost” while editing to see what you bought it for
+                    versus what the customer was charged.
+                  </p>
+                )}
+              </>
             )}
           </section>
 

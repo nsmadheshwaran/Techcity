@@ -40,6 +40,8 @@ export interface PartDraft {
   name: string
   quantity: number
   unitPrice: number
+  /** Internal cost per unit (what the shop paid) — never printed on customer documents. */
+  costPrice?: number
 }
 
 export type ServiceDraft = Omit<
@@ -151,6 +153,9 @@ async function savePartsFor(serviceId: string, parts: PartDraft[], isDemo: boole
       quantity: Number(p.quantity) || 1,
       unitPrice: round2(p.unitPrice),
       total: round2((Number(p.quantity) || 1) * (Number(p.unitPrice) || 0)),
+      costPrice: p.costPrice !== undefined && p.costPrice !== null && Number(p.costPrice) > 0
+        ? round2(Number(p.costPrice))
+        : undefined,
       createdAt: nowISO(),
       updatedAt: nowISO(),
       isDemo,
