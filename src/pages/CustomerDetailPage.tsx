@@ -47,6 +47,7 @@ import {
   initials,
   monthKey,
   monthLabel,
+  todayISO,
   toWhatsAppNumber,
 } from '@/utils/format'
 
@@ -70,7 +71,7 @@ export default function CustomerDetailPage() {
     'contacts' | 'history' | 'timeline' | 'equipment' | 'reminders' | 'calls'
   >('contacts')
   const [showPassword, setShowPassword] = useState(false)
-  const [reportMonth, setReportMonth] = useState(monthKey())
+  const [reportMonth, setReportMonth] = useState(() => monthKey(todayISO()))
 
   const stats = useMemo(() => computeStats(services ?? []), [services])
 
@@ -130,7 +131,7 @@ export default function CustomerDetailPage() {
 
   const monthlyMonths = useMemo(() => {
     const set = new Set<string>()
-    set.add(monthKey())
+    set.add(monthKey(todayISO()))
     for (const s of services ?? []) set.add(monthKey(s.serviceDate))
     return [...set].sort().reverse()
   }, [services])

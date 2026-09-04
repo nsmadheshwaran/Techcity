@@ -458,19 +458,23 @@ alter table public.business_settings add column if not exists alt_phone       te
 -- calls (call book)
 -- ---------------------------------------------------------------------
 create table if not exists public.calls (
-  id          uuid primary key default gen_random_uuid(),
-  owner_id    uuid not null default auth.uid() references auth.users (id) on delete cascade,
-  date        date not null default current_date,
-  source      text not null check (source in ('Online', 'Direct', 'Demo')),
-  status      text not null default 'New'
-                check (status in ('New', 'Follow Up', 'Completed', 'No Response')),
-  customer_id uuid references public.customers (id) on delete set null,
-  name        text not null,
-  phone       text,
-  notes       text,
-  is_demo     boolean not null default false,
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
+  id              uuid primary key default gen_random_uuid(),
+  owner_id        uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  date            date not null default current_date,
+  source          text not null check (source in ('Online', 'Direct', 'Demo')),
+  status          text not null default 'Pending'
+                    check (status in ('Pending', 'In Progress', 'Completed', 'No Response')),
+  customer_id     uuid references public.customers (id) on delete set null,
+  name            text not null,
+  phone           text,
+  contact_person  text,
+  issue           text,
+  priority        text check (priority in ('P1', 'P2', 'P3')),
+  appointment_date date,
+  notes           text,
+  is_demo         boolean not null default false,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
 );
 create index if not exists calls_owner_date_idx on public.calls (owner_id, date desc);
 create index if not exists calls_customer_idx   on public.calls (customer_id);
