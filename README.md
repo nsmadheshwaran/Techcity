@@ -644,25 +644,43 @@ passcode lock are all fully local and work offline.
 
 ---
 
-## 13. Optional: switching to Supabase
+## 13. Optional: multi-device cloud sync (Supabase)
 
-The default local database is the right choice for a single shop computer. Move to
-Supabase when you need **multiple devices sharing one live database** (e.g. the
-counter PC and the owner's phone).
+The default local database is the right choice for a single shop computer. Turn on
+cloud sync when the owner wants the **same live data on the phone AND the computer**
+(e.g. add a customer from either device and see it on both).
 
-1. Create a project at [supabase.com](https://supabase.com).
-2. **SQL Editor → New query →** paste [`supabase/schema.sql`](supabase/schema.sql) → **Run**.
-   This creates every table, index, constraint, auto-total trigger, RLS policy and view.
-3. **Authentication → Providers →** enable Email.
-4. Put your project URL and anon key in `.env`:
+The sync layer is already implemented (`src/lib/cloud.ts`, `src/services/sync.ts`):
+when `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` are set, the app shows an owner
+sign-in screen and then keeps this device in sync with the cloud every 45 seconds
+(and whenever the window regains focus). Without those two variables nothing
+changes — the app stays 100% local and offline-capable.
+
+### Setup
+
+1. Create a free project at [supabase.com](https://supabase.com) (one project per
+   business account is enough).
+2. **SQL Editor → New query →** paste the whole
+   [`supabase/schema.sql`](supabase/schema.sql) → **Run**. This creates every table,
+   index, constraint, trigger, RLS policy and view (re-running is safe).
+3. **Authentication → Providers →** enable **Email**.
+4. In **Authentication → Users**, add the owner's email + password (this is the
+   single owner account — the app is built for one person, no employees).
+5. Copy **Project Settings → API** values into `.env` (and into Vercel → project →
+   Settings → Environment Variables, then redeploy):
    ```
    VITE_SUPABASE_URL=https://xxxxx.supabase.co
    VITE_SUPABASE_ANON_KEY=eyJhbGci...
    ```
-5. `npm install @supabase/supabase-js`
-6. Reimplement the six functions in `src/services/*.ts` against Supabase and swap
-   `src/lib/auth.tsx` for Supabase Auth. **No page or component needs to change** —
-   they only talk to the service layer and the `useData` hooks.
+6. Open the app on the first device (computer), log in with the owner email — the
+   first login uploads everything already saved locally. Log in on the phone with
+   the same email and the records appear there too. Changes made on either device
+   reach the other within about a minute or on the next app open.
+
+**How it works (simple, for one owner):** the local store is the working cache.
+Each sync pushes local changes (including deletes, journaled per row) and then
+pulls the cloud dataset, which is authoritative. The owner works on one device at
+a time, so "last device to sync wins" is the intended model.
 
 **Security notes already handled in the schema:**
 - Row Level Security is enabled on every table.

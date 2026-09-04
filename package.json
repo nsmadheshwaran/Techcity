@@ -17,6 +17,7 @@
     "test:all": "playwright test && playwright test --config playwright.prod.config.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.115.0",
     "clsx": "^2.1.1",
     "dexie": "^4.4.4",
     "dexie-react-hooks": "^4.4.0",
@@ -40,5 +41,5 @@
     "typescript": "~6.0.2",
     "vite": "^8.2.0"
   },
-  "description": "Customer & Service Management System for Tech City Technology \u2014 Computer Sales, Service, CCTV & Networking"
+  "description": "Customer & Service Management System for Tech City Technology — Computer Sales, Service, CCTV & Networking"
 }

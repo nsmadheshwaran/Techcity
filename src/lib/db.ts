@@ -41,6 +41,8 @@ export class TechCityDB extends Dexie {
   settings!: Table<BusinessSettings, string>
   users!: Table<AppUser, string>
   counters!: Table<{ key: string; value: number }, string>
+  /** Local journal of deleted row ids that still need deleting in the cloud. */
+  outbox!: Table<SyncOutboxRow, number>
 
   constructor() {
     super('techcity_db')
@@ -81,7 +83,22 @@ export class TechCityDB extends Dexie {
       calls: 'id, date, source, customerId, status, createdAt',
       quotations: 'id, code, customerId, date, status, createdAt',
     })
+
+    // v5 — outbox journal for the optional Supabase (cloud) sync. When a row
+    // is deleted locally its id is journaled here so the next successful sync
+    // can delete it from the cloud too. Local-only apps never touch it.
+    this.version(5).stores({
+      outbox: '++id, table, rowId, at',
+    })
   }
+}
+
+/** A pending cloud deletion: row `rowId` of table `table` was deleted locally. */
+export interface SyncOutboxRow {
+  id?: number
+  table: string
+  rowId: string
+  at: string
 }
 
 export const db = new TechCityDB()

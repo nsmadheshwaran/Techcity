@@ -100,6 +100,7 @@ export async function restoreBackup(raw: string) {
       db.quotations,
       db.settings,
       db.counters,
+      db.outbox,
     ],
     async () => {
       await Promise.all([
@@ -113,6 +114,7 @@ export async function restoreBackup(raw: string) {
         db.calls.clear(),
         db.quotations.clear(),
         db.counters.clear(),
+        db.outbox.clear(),
       ])
       if (d.customers?.length) await db.customers.bulkAdd(d.customers)
       if (d.services?.length) await db.services.bulkAdd(d.services)
@@ -269,5 +271,6 @@ export async function wipeAllData() {
     db.calls.clear(),
     db.quotations.clear(),
     db.counters.clear(),
+    db.outbox.clear(),
   ])
 }

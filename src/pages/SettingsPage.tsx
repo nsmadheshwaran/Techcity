@@ -29,6 +29,7 @@ import {
 } from '@/services/backup'
 import { clearDemoData, demoAllowed, seedDemoData } from '@/services/seed'
 import { readFileAsDataURL, readFileAsText } from '@/utils/csv'
+import { CloudStatusCard } from '@/cloud/CloudGate'
 
 type Tab = 'business' | 'documents' | 'services' | 'security' | 'backup'
 
@@ -602,6 +603,7 @@ function BackupTab({ toast }: { toast: ToastApi }) {
 
   return (
     <div className="space-y-4">
+      <CloudStatusCard />
       <section className="card p-4 sm:p-5">
         <h2 className="mb-1 text-[15px] font-semibold text-ink-900">Backup & Restore</h2>
         <p className="mb-4 text-[13px] leading-relaxed text-ink-500">

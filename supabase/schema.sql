@@ -431,3 +431,112 @@ from public.customers c
 left join public.services s
        on s.customer_id = c.id and s.status <> 'Cancelled'
 group by c.id;
+
+-- =====================================================================
+--  CLOUD SYNC ADDENDUM (schema v4/v5)
+--  Columns + tables the sync layer (src/services/sync.ts) needs. Run this
+--  file in full on a fresh project: Supabase Dashboard → SQL Editor → paste.
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- Column backfills (safe on existing projects)
+-- ---------------------------------------------------------------------
+alter table public.customers         add column if not exists gst_number      text;
+alter table public.customers         add column if not exists password        text;
+alter table public.customers         add column if not exists complaint_date  date;
+alter table public.customers         add column if not exists amc_type        text;
+alter table public.customers         add column if not exists amc_years       integer;
+alter table public.customers         add column if not exists amc_start_date  date;
+alter table public.customers         add column if not exists amc_expiry      date;
+
+alter table public.services          add column if not exists service_mode    text default 'Offline';
+alter table public.service_parts     add column if not exists position        integer;
+alter table public.service_parts     add column if not exists cost_price      numeric(12,2);
+alter table public.business_settings add column if not exists alt_phone       text;
+
+-- ---------------------------------------------------------------------
+-- calls (call book)
+-- ---------------------------------------------------------------------
+create table if not exists public.calls (
+  id          uuid primary key default gen_random_uuid(),
+  owner_id    uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  date        date not null default current_date,
+  source      text not null check (source in ('Online', 'Direct', 'Demo')),
+  status      text not null default 'New'
+                check (status in ('New', 'Follow Up', 'Completed', 'No Response')),
+  customer_id uuid references public.customers (id) on delete set null,
+  name        text not null,
+  phone       text,
+  notes       text,
+  is_demo     boolean not null default false,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+create index if not exists calls_owner_date_idx on public.calls (owner_id, date desc);
+create index if not exists calls_customer_idx   on public.calls (customer_id);
+
+-- ---------------------------------------------------------------------
+-- quotations
+-- ---------------------------------------------------------------------
+create sequence if not exists quotation_code_seq start 1;
+
+create table if not exists public.quotations (
+  id           uuid primary key default gen_random_uuid(),
+  owner_id     uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  code         text not null unique
+                 default ('TC-QTN-' || lpad(nextval('quotation_code_seq')::text, 5, '0')),
+  customer_id  uuid not null references public.customers (id) on delete cascade,
+  date         date not null default current_date,
+  valid_until  date,
+  status       text not null default 'Draft'
+                 check (status in ('Draft', 'Sent', 'Accepted', 'Expired')),
+  items        jsonb not null default '[]'::jsonb,
+  discount     numeric(12,2) not null default 0,
+  tax_percent  numeric(5,2)  not null default 0,
+  subtotal     numeric(12,2) not null default 0,
+  tax_amount   numeric(12,2) not null default 0,
+  total_amount numeric(12,2) not null default 0,
+  notes        text,
+  is_demo      boolean not null default false,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+create index if not exists quotations_owner_date_idx on public.quotations (owner_id, date desc);
+create index if not exists quotations_customer_idx   on public.quotations (customer_id);
+
+-- ---------------------------------------------------------------------
+-- counters — keeps human-readable code sequences (TC-CUS-00001 …) in sync
+-- so the phone and the computer never reuse a number.
+-- ---------------------------------------------------------------------
+create table if not exists public.counters (
+  owner_id   uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  key        text not null,
+  value      integer not null default 0,
+  updated_at timestamptz not null default now(),
+  primary key (owner_id, key)
+);
+
+-- ---------------------------------------------------------------------
+-- Row level security for the new tables
+-- ---------------------------------------------------------------------
+alter table public.calls          enable row level security;
+alter table public.quotations     enable row level security;
+alter table public.counters       enable row level security;
+
+drop policy if exists "calls_owner_all" on public.calls;
+create policy "calls_owner_all" on public.calls
+  for all to authenticated
+  using     (owner_id = auth.uid())
+  with check (owner_id = auth.uid());
+
+drop policy if exists "quotations_owner_all" on public.quotations;
+create policy "quotations_owner_all" on public.quotations
+  for all to authenticated
+  using     (owner_id = auth.uid())
+  with check (owner_id = auth.uid());
+
+drop policy if exists "counters_owner_all" on public.counters;
+create policy "counters_owner_all" on public.counters
+  for all to authenticated
+  using     (owner_id = auth.uid())
+  with check (owner_id = auth.uid());

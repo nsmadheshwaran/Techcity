@@ -8,6 +8,7 @@ import { ToastProvider } from '@/components/ui/Toast'
 import { LoadingState, ErrorState } from '@/components/ui/States'
 import { AuthProvider, useAuth } from '@/lib/auth'
 import { initDB } from '@/lib/db'
+import { CloudLogin, CloudProvider, useCloud } from '@/cloud/CloudGate'
 
 import DashboardPage from '@/pages/DashboardPage'
 import CustomersPage from '@/pages/CustomersPage'
@@ -59,6 +60,18 @@ function Gate() {
   const { ready, enabled, unlocked } = useAuth()
   if (!ready) return <LoadingState label="Starting Tech City Technology…" />
   if (enabled && !unlocked) return <LockScreen />
+  return (
+    <CloudProvider>
+      <GateCloud />
+    </CloudProvider>
+  )
+}
+
+/** Second gate — owner login, only when cloud sync is configured on this build. */
+function GateCloud() {
+  const cloud = useCloud()
+  if (!cloud.booted) return <LoadingState label="Checking sync…" />
+  if (cloud.enabled && !cloud.userEmail) return <CloudLogin />
   return <RouterProvider router={router} />
 }
 
