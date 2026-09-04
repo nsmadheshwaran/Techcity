@@ -179,10 +179,12 @@ test('settings changes flow into generated PDFs (branding, terms, GST)', async (
   await page.getByRole('button', { name: 'Save & mark completed' }).click()
   await expect(page.getByText('Service saved successfully')).toBeVisible({ timeout: 15000 })
 
-  // Download the invoice and confirm the new settings are inside the PDF
+  // Download the invoice and confirm the new settings are inside the PDF.
+  // The success banner carries a Report (Delivery Challan) action set, so pick
+  // the last Download PDF button — the Customer Copy set bound to the invoice.
   await page.getByRole('button', { name: 'Invoice', exact: true }).click()
   const dl = page.waitForEvent('download', { timeout: 30000 })
-  await page.getByRole('button', { name: 'Download PDF' }).first().click()
+  await page.getByRole('button', { name: 'Download PDF' }).last().click()
   const download = await dl
   const p = path.join(DOWNLOADS, download.suggestedFilename())
   await download.saveAs(p)

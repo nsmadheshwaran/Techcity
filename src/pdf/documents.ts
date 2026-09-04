@@ -1,17 +1,20 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import logoDefault from '@/assets/logo-tc.jpg?inline'
 import type {
   BusinessSettings,
   Customer,
   DocKind,
   Payment,
+  Quotation,
   Service,
   ServicePart,
 } from '@/types'
 import { formatAmount, formatDateLong, formatDateShort } from '@/utils/format'
 
 /**
- * PDF generation for Service Reports, Invoices and Receipts.
+ * PDF generation for Service / Installation Reports (Delivery Challan format),
+ * Invoices, Receipts, Customer History and Quotations.
  *
  * Uses jsPDF + autotable with a hand-built layout so output is print ready A4,
  * with no external assets (works fully offline).
@@ -36,11 +39,18 @@ export interface DocInput {
   settings: BusinessSettings
 }
 
+export interface QuotationDocInput {
+  quotation: Quotation
+  customer: Customer
+  settings: BusinessSettings
+}
+
 const TITLES: Record<DocKind, string> = {
-  report: 'SERVICE REPORT',
+  report: 'SERVICE / INSTALLATION REPORT',
   invoice: 'TAX INVOICE',
   receipt: 'PAYMENT RECEIPT',
   history: 'CUSTOMER HISTORY',
+  quotation: 'QUOTATION',
 }
 
 /** jsPDF's built-in fonts are Latin-1 only — ₹ renders as a blank box, so use "Rs." */
@@ -55,8 +65,8 @@ function clean(text?: string | null): string {
     .replace(/₹/g, 'Rs.')
     .replace(/[•·]/g, '-')
     .replace(/[–—]/g, '-')
-    .replace(/[""]/g, '"')
-    .replace(/['']/g, "'")
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'")
 }
 
 function docTitle(kind: DocKind, service: Service, settings: BusinessSettings): string {
@@ -65,24 +75,31 @@ function docTitle(kind: DocKind, service: Service, settings: BusinessSettings): 
 }
 
 /* ------------------------------------------------------------------ */
-/* Header / footer                                                     */
+/* Logo resolution                                                     */
 /* ------------------------------------------------------------------ */
 
-function drawHeader(doc: jsPDF, input: DocInput): number {
-  const { settings, service, kind } = input
-  let y = M
+/**
+ * The business logo: the one uploaded in Settings, falling back to the TC
+ * logo bundled with the app, then a drawn placeholder as a last resort.
+ */
+function resolveLogo(settings: BusinessSettings): { data: string; format: 'PNG' | 'JPEG' } | null {
+  const src = settings.logoDataUrl || logoDefault
+  if (!src) return null
+  const fmt = src.includes('image/png') ? ('PNG' as const) : ('JPEG' as const)
+  return { data: src, format: fmt }
+}
 
-  // Top brand bar
-  doc.setFillColor(...BRAND)
-  doc.rect(0, 0, PAGE_W, 3, 'F')
-  y = 12
+/* ------------------------------------------------------------------ */
+/* Shared letterhead / footer                                          */
+/* ------------------------------------------------------------------ */
 
-  // Logo (uploaded image, or a drawn placeholder block)
+/** Company block (logo + name + tagline + contact lines). Returns the y below it. */
+function drawCompanyBlock(doc: jsPDF, settings: BusinessSettings, y: number): number {
+  const logo = resolveLogo(settings)
   const logoSize = 17
-  if (settings.logoDataUrl) {
+  if (logo) {
     try {
-      const fmt = settings.logoDataUrl.includes('image/png') ? 'PNG' : 'JPEG'
-      doc.addImage(settings.logoDataUrl, fmt, M, y, logoSize, logoSize, undefined, 'FAST')
+      doc.addImage(logo.data, logo.format, M, y, logoSize, logoSize, undefined, 'FAST')
     } catch {
       drawLogoPlaceholder(doc, M, y, logoSize)
     }
@@ -91,7 +108,6 @@ function drawHeader(doc: jsPDF, input: DocInput): number {
   }
 
   const textX = M + logoSize + 5
-
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(16)
   doc.setTextColor(...BRAND)
@@ -106,19 +122,39 @@ function drawHeader(doc: jsPDF, input: DocInput): number {
     clean(settings.address),
     [settings.phone, settings.altPhone].filter(Boolean).map(clean).join('  |  '),
     [settings.email, settings.website].filter(Boolean).map(clean).join('  |  '),
-    settings.gstEnabled && settings.gstNumber ? `GSTIN: ${clean(settings.gstNumber)}` : '',
   ].filter(Boolean)
 
   doc.setFontSize(7.8)
-  doc.setTextColor(...MUTED)
   let cy = y + 15.5
   for (const line of contactLines) {
-    const wrapped = doc.splitTextToSize(line, CONTENT_W - logoSize - 5 - 42)
+    const wrapped = doc.splitTextToSize(line, CONTENT_W - logoSize - 5 - 46)
     for (const w of wrapped) {
       doc.text(w, textX, cy)
       cy += 3.4
     }
   }
+
+  if (settings.gstEnabled && settings.gstNumber) {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8)
+    doc.setTextColor(...INK)
+    doc.text(`GSTIN: ${clean(settings.gstNumber)}`, textX, cy + 0.4)
+    cy += 4
+  }
+  return cy
+}
+
+/** Modern document header — company block left, document label right. */
+function drawHeader(doc: jsPDF, input: DocInput): number {
+  const { settings, service, kind } = input
+  let y = M
+
+  // Top brand bar
+  doc.setFillColor(...BRAND)
+  doc.rect(0, 0, PAGE_W, 3, 'F')
+  y = 12
+
+  const cy = drawCompanyBlock(doc, settings, y)
 
   // Document label block (right aligned)
   doc.setFont('helvetica', 'bold')
@@ -183,7 +219,7 @@ function drawFooter(doc: jsPDF, input: DocInput) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Sections                                                            */
+/* Shared drawing helpers                                              */
 /* ------------------------------------------------------------------ */
 
 function sectionTitle(doc: jsPDF, title: string, y: number): number {
@@ -194,6 +230,17 @@ function sectionTitle(doc: jsPDF, title: string, y: number): number {
   doc.setTextColor(...INK)
   doc.text(title.toUpperCase(), M + 4, y)
   return y + 4.5
+}
+
+/** Full-width dark bar used for the challan's section headings. */
+function bandTitle(doc: jsPDF, title: string, y: number): number {
+  doc.setFillColor(...BRAND)
+  doc.rect(M, y - 4.2, CONTENT_W, 6.4, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.setTextColor(255, 255, 255)
+  doc.text(clean(title).toUpperCase(), PAGE_W / 2, y + 0.4, { align: 'center' })
+  return y + 5.6
 }
 
 /** Two-column key/value grid inside a light panel. */
@@ -261,11 +308,491 @@ function pageBreakIfNeeded(doc: jsPDF, y: number, needed = 40): number {
   return y
 }
 
+/** Draws a labelled checkbox at (x, yBaseline). Returns the x after the label. */
+function checkbox(
+  doc: jsPDF,
+  x: number,
+  y: number,
+  label: string,
+  checked: boolean,
+): number {
+  const size = 3
+  const gap = 1.4
+  doc.setDrawColor(...INK)
+  doc.setLineWidth(0.3)
+  doc.rect(x, y - size + 0.5, size, size, 'S')
+  if (checked) {
+    doc.setFillColor(...BRAND)
+    doc.rect(x + 0.4, y - size + 0.9, size - 0.8, size - 0.8, 'F')
+  }
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  doc.setTextColor(...INK)
+  doc.text(clean(label), x + size + gap, y)
+  return x + size + gap + doc.getTextWidth(clean(label)) + 4.5
+}
+
+/** Field row: label left, then an underline (or the value) running to width. */
+function fieldRow(
+  doc: jsPDF,
+  y: number,
+  label: string,
+  value: string,
+  opts: { labelW?: number; valueWidth?: number; boldValue?: boolean } = {},
+): void {
+  const labelW = opts.labelW ?? 46
+  const valueWidth = opts.valueWidth ?? CONTENT_W - labelW
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8.5)
+  doc.setTextColor(...MUTED)
+  doc.text(clean(label), M, y)
+
+  doc.setFont('helvetica', opts.boldValue ? 'bold' : 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(...INK)
+  const v = clean(value)
+  const lineX = M + labelW
+  if (v) {
+    doc.text(v, lineX, y)
+  } else {
+    doc.setDrawColor(...LINE)
+    doc.setLineWidth(0.25)
+    doc.line(lineX, y + 0.5, lineX + valueWidth, y + 0.5)
+  }
+}
+
 /* ------------------------------------------------------------------ */
-/* Main builder                                                        */
+/* Delivery Challan (Service / Installation Report)                    */
 /* ------------------------------------------------------------------ */
 
-export function buildDocument(input: DocInput): jsPDF {
+/**
+ * Builds the Service Report in the shop's Delivery Challan format — the same
+ * form the business prints: customer block, service nature + equipment type
+ * checkboxes, product information, complaint / action taken, and a work
+ * completion certificate with signatures.
+ */
+export function buildChallanDocument(input: DocInput): jsPDF {
+  const { service, customer, parts, settings } = input
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true })
+  doc.setProperties({
+    title: `SERVICE / INSTALLATION REPORT ${service.code}`,
+    subject: `${service.serviceType} - ${customer.name}`,
+    author: settings.name,
+    creator: settings.name,
+  })
+
+  // ---- Letterhead -------------------------------------------------
+  let y = 13
+  doc.setFillColor(...BRAND)
+  doc.rect(0, 0, PAGE_W, 3, 'F')
+  const cy = drawCompanyBlock(doc, settings, y)
+
+  // Right-aligned document identity
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(...INK)
+  doc.text('SERVICE / INSTALLATION REPORT', PAGE_W - M, y + 5, { align: 'right' })
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8.5)
+  doc.setTextColor(...MUTED)
+  doc.text(`S. No: ${clean(service.code)}`, PAGE_W - M, y + 10.5, { align: 'right' })
+  doc.text(`Date: ${formatDateShort(service.serviceDate)}`, PAGE_W - M, y + 15, { align: 'right' })
+  doc.text(`Status: ${clean(service.status)}`, PAGE_W - M, y + 19.5, { align: 'right' })
+
+  const headerBottom = Math.max(cy, y + 23)
+  doc.setDrawColor(...LINE)
+  doc.setLineWidth(0.4)
+  doc.line(M, headerBottom, PAGE_W - M, headerBottom)
+  y = headerBottom + 5
+
+  // ---- Customer + service details panel ---------------------------
+  const product = service.product ? clean(service.product) : ''
+
+  const isNewInstallation = /install/i.test(service.serviceType)
+  const isWarranty = /warrant/i.test(service.serviceType)
+  const isAmc = /amc/i.test(service.serviceType)
+  const isOnCall = !isNewInstallation && !isWarranty && !isAmc
+
+  const p = product.toLowerCase()
+  const isCctv = /cctv|camera|dvr|nvr/i.test(p)
+  const isLaptop = /laptop|notebook/i.test(p)
+  const isDesktop = /desktop|pc|computer|cpu/i.test(p)
+  const equipmentTicked = isCctv ? 'CCTV Analog / IP' : isLaptop ? 'Laptop' : isDesktop ? 'Desktop' : 'Others'
+
+  // Plain detail rows (full width)
+  const rows: [string, string][] = [
+    ['Customer Name', customer.name],
+    ['Address', [customer.address, customer.city, customer.pincode].filter(Boolean).join(', ')],
+    ['Contact Person', ''],
+    ['Landline / Mobile No', [customer.phone, customer.altPhone].filter(Boolean).join(' / ')],
+  ]
+
+  const rowH = 7.2
+  const labelW = 56
+  const available = CONTENT_W - labelW - 4
+
+  // Pre-wrap the detail values so long addresses fold instead of overflowing
+  const prepped = rows.map(([label, value]) => {
+    const full = clean(value)
+    const wrapped = full ? doc.splitTextToSize(full, available) : []
+    return {
+      label: `${label} :`,
+      first: (wrapped[0] as string | undefined) ?? full,
+      extra: (wrapped.slice(1, 3) as string[]) ?? [],
+    }
+  })
+
+  const detailH = prepped.reduce((sum, r) => sum + rowH + r.extra.length * 3.4, 0)
+  const panelH = detailH + rowH * 2 + 5 // + 2 checkbox rows + padding
+  const boxTop = y
+
+  doc.setDrawColor(...LINE)
+  doc.setLineWidth(0.3)
+  doc.roundedRect(M, boxTop, CONTENT_W, panelH, 1.2, 1.2, 'S')
+
+  let ry = boxTop + 5.4
+  prepped.forEach((r) => {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8.5)
+    doc.setTextColor(...MUTED)
+    doc.text(clean(r.label), M, ry)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.setTextColor(...INK)
+    if (r.first) {
+      doc.text(r.first, M + labelW, ry)
+    } else {
+      doc.setDrawColor(...LINE)
+      doc.setLineWidth(0.25)
+      doc.line(M + labelW, ry + 0.5, M + labelW + available, ry + 0.5)
+    }
+    if (r.extra.length) {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8.2)
+      doc.setTextColor(...INK)
+      doc.text(r.extra, M + labelW, ry + 3.6)
+    }
+    ry += rowH + r.extra.length * 3.4
+  })
+
+  // Service Type checkboxes
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.setTextColor(...MUTED)
+  doc.text('Service Type :', M, ry)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  let cx = M + labelW
+  cx = checkbox(doc, cx, ry, 'New Installation', isNewInstallation)
+  cx = checkbox(doc, cx, ry, 'Warranty', isWarranty)
+  cx = checkbox(doc, cx, ry, 'AMC', isAmc)
+  checkbox(doc, cx, ry, 'On Call Charges', isOnCall)
+  ry += rowH
+
+  // Equipment Type checkboxes
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.setTextColor(...MUTED)
+  doc.text('Equipment Type :', M, ry)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  cx = M + labelW
+  cx = checkbox(doc, cx, ry, 'CCTV Analog / IP', equipmentTicked === 'CCTV Analog / IP')
+  cx = checkbox(doc, cx, ry, 'Laptop', equipmentTicked === 'Laptop')
+  cx = checkbox(doc, cx, ry, 'Desktop', equipmentTicked === 'Desktop')
+  checkbox(doc, cx, ry, 'Others', equipmentTicked === 'Others')
+
+  y = boxTop + panelH + 7
+
+  // ---- Installation / Service product information -----------------
+  y = pageBreakIfNeeded(doc, y, 55)
+  y = bandTitle(doc, 'Installation / Service Product Information', y) + 1
+
+  const descLines: string[] = []
+  if (service.product) {
+    const extra = [service.brand, service.model].filter(Boolean).join(' ')
+    const withSerial = service.serialNumber
+      ? `${service.product}${extra ? ` (${extra})` : ''} — SN: ${service.serialNumber}`
+      : `${service.product}${extra ? ` (${extra})` : ''}`
+    descLines.push(withSerial)
+  }
+  parts.forEach((p2) => {
+    descLines.push(
+      `${p2.name}${p2.quantity > 1 ? `  x${p2.quantity}` : ''}${
+        p2.unitPrice > 0 ? `  @ Rs. ${formatAmount(p2.unitPrice)}` : ''
+      }`,
+    )
+  })
+  if (!descLines.length) descLines.push('—')
+
+  const body = descLines.map((d, i) => [String(i + 1), clean(d)])
+  autoTable(doc, {
+    startY: y,
+    head: [['S No', 'Product Description']],
+    body,
+    theme: 'grid',
+    margin: { left: M, right: M },
+    styles: { font: 'helvetica', fontSize: 8.2, cellPadding: 2, textColor: INK, lineColor: LINE, lineWidth: 0.15 },
+    headStyles: { fillColor: [235, 238, 243], textColor: INK, fontStyle: 'bold', fontSize: 8 },
+    columnStyles: { 0: { cellWidth: 14, halign: 'center' }, 1: { cellWidth: 'auto' } },
+  })
+  // @ts-expect-error - lastAutoTable is added by jspdf-autotable at runtime
+  y = (doc.lastAutoTable?.finalY ?? y) + 4
+
+  // ---- Remaining job-sheet fields ---------------------------------
+  y = pageBreakIfNeeded(doc, y, 62)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8.5)
+
+  const replaced = parts.length > 0
+  fieldRow(doc, y, 'Wiring Measurement in Mtrs :', '', { labelW: 60 })
+  fieldRow(doc, y + 8, 'Person got Trained (Name, Designation, Contact No) :', '', { labelW: 88 })
+
+  // Product replaced: Yes / No checkboxes, then "Specify"
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8.5)
+  doc.setTextColor(...MUTED)
+  doc.text('Whether Product replaced :', M, y + 16)
+  let bx = M + 50
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  bx = checkbox(doc, bx, y + 16, 'Yes', replaced)
+  bx = checkbox(doc, bx, y + 16, 'No', !replaced)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8.5)
+  doc.setTextColor(...INK)
+  doc.text(`Specify : ${parts.map((p2) => clean(p2.name)).join(', ') || 'N/A'}`, bx + 2, y + 16)
+
+  y += 29
+
+  // Compact labelled blocks for complaint / action / remarks
+  function jobBlock(doc: jsPDF, y: number, label: string, value?: string): number {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8)
+    doc.setTextColor(...MUTED)
+    doc.text(clean(label).toUpperCase(), M, y)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8.6)
+    doc.setTextColor(...INK)
+    const lines = doc.splitTextToSize(clean(value) || '—', CONTENT_W)
+    doc.text(lines, M, y + 3.6)
+    return y + 3.6 + lines.length * 4 + 4.5
+  }
+
+  y = jobBlock(doc, y, 'Nature of Complaint', service.complaint)
+  y = jobBlock(doc, y, 'Action Taken', [service.diagnosis, service.workPerformed].filter(Boolean).join('  •  '))
+  y = jobBlock(doc, y, 'Customer Remarks / Feed Back', service.notes)
+
+  // ---- Work completion certificate --------------------------------
+  y = pageBreakIfNeeded(doc, y, 64)
+  y = bandTitle(doc, 'Work Completion Certificate', y) + 1
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8.4)
+  doc.setTextColor(...INK)
+  const installOf = product
+    ? `Installation of "${product}"`
+    : 'Installation'
+  const certSentence = service.serviceType
+    ? `${installOf} (Service: ${clean(service.serviceType)}) for "${clean(
+        customer.name,
+      )}" has been successfully completed on ${formatDateShort(service.serviceDate)}.`
+    : `${installOf} for "${clean(
+        customer.name,
+      )}" has been successfully completed on ${formatDateShort(service.serviceDate)}.`
+  const certText = doc.splitTextToSize(certSentence, CONTENT_W - 6)
+  doc.text(certText, M + 2, y + 1.5)
+  y += 2.5 + certText.length * 4.2
+
+  // Dates + time row
+  const halfW = (CONTENT_W - 8) / 2
+  fieldRow(doc, y, 'Installation Commenced Date', service.serviceDate, { labelW: 52, valueWidth: halfW - 40, boldValue: true })
+  fieldRow(doc, y, 'Completed Date', '', { labelW: 38, valueWidth: halfW - 8 })
+  y += 7.5
+  fieldRow(doc, y, 'TIME IN :', '', { labelW: 30, valueWidth: halfW - 14 })
+  fieldRow(doc, y, 'TIME OUT :', '', { labelW: 30, valueWidth: halfW - 14 })
+  y += 14
+
+  // Signatures
+  doc.setDrawColor(...LINE)
+  doc.setLineWidth(0.3)
+  doc.line(M, y, M + 60, y)
+  doc.line(PAGE_W - M - 60, y, PAGE_W - M, y)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  doc.setTextColor(...MUTED)
+  doc.text('Customer Representative Sign', M, y + 4.5)
+  doc.text('Company Seal and Date', M, y + 9)
+  doc.text(`For ${clean(settings.name)}`, PAGE_W - M, y + 4.5, { align: 'right' })
+  doc.text(
+    service.technician ? `Service Engineer Sign (${clean(service.technician)})` : 'Service Engineer Sign',
+    PAGE_W - M,
+    y + 9,
+    { align: 'right' },
+  )
+
+  return doc
+}
+
+/* ------------------------------------------------------------------ */
+/* Quotation                                                           */
+/* ------------------------------------------------------------------ */
+
+export function buildQuotationDocument(input: QuotationDocInput): jsPDF {
+  const { quotation, customer, settings } = input
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true })
+  doc.setProperties({
+    title: `Quotation ${quotation.code}`,
+    subject: `${customer.name} - ${customer.code}`,
+    author: settings.name,
+    creator: settings.name,
+  })
+
+  let y = 13
+  doc.setFillColor(...BRAND)
+  doc.rect(0, 0, PAGE_W, 3, 'F')
+  const cy = drawCompanyBlock(doc, settings, y)
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(...INK)
+  doc.text('QUOTATION', PAGE_W - M, y + 5, { align: 'right' })
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8.5)
+  doc.setTextColor(...MUTED)
+  doc.text(`No: ${clean(quotation.code)}`, PAGE_W - M, y + 10.5, { align: 'right' })
+  doc.text(`Date: ${formatDateShort(quotation.date)}`, PAGE_W - M, y + 15, { align: 'right' })
+  if (quotation.validUntil) {
+    doc.text(`Valid until: ${formatDateShort(quotation.validUntil)}`, PAGE_W - M, y + 19.5, { align: 'right' })
+  }
+  doc.text(`Status: ${clean(quotation.status)}`, PAGE_W - M, quotation.validUntil ? y + 24 : y + 19.5, {
+    align: 'right',
+  })
+
+  const headerBottom = Math.max(cy, quotation.validUntil ? y + 26 : y + 22)
+  doc.setDrawColor(...LINE)
+  doc.setLineWidth(0.4)
+  doc.line(M, headerBottom, PAGE_W - M, headerBottom)
+  y = headerBottom + 6
+
+  // Bill to
+  y = sectionTitle(doc, 'Quotation To', y)
+  const custRows: [string, string][] = [
+    ['Name', customer.name],
+    ['Customer ID', customer.code],
+    ['Phone', [customer.phone, customer.altPhone].filter(Boolean).join(' / ')],
+    ['Email', customer.email ?? ''],
+    ['Address', [customer.address, customer.city].filter(Boolean).join(', ')],
+  ]
+  if (customer.gstNumber) custRows.push(['GST Number', customer.gstNumber])
+  y = infoPanel(doc, y, custRows)
+
+  // Items
+  y = pageBreakIfNeeded(doc, y, 55)
+  y = sectionTitle(doc, 'Items', y)
+  const rows = quotation.items.map((it, i) => [
+    String(i + 1),
+    clean(it.name),
+    String(it.quantity),
+    formatAmount(it.unitPrice),
+    formatAmount(it.amount),
+  ])
+  autoTable(doc, {
+    startY: y,
+    head: [['#', 'Description', 'Qty', 'Rate', 'Amount']],
+    body: rows,
+    theme: 'grid',
+    margin: { left: M, right: M },
+    styles: { font: 'helvetica', fontSize: 8.6, cellPadding: 2.6, textColor: INK, lineColor: LINE, lineWidth: 0.15 },
+    headStyles: { fillColor: BRAND, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.4 },
+    alternateRowStyles: { fillColor: [250, 251, 252] },
+    columnStyles: {
+      0: { cellWidth: 10, halign: 'center' },
+      1: { cellWidth: 'auto' },
+      2: { cellWidth: 14, halign: 'center' },
+      3: { cellWidth: 28, halign: 'right' },
+      4: { cellWidth: 30, halign: 'right' },
+    },
+  })
+  // @ts-expect-error - lastAutoTable is added by jspdf-autotable at runtime
+  y = (doc.lastAutoTable?.finalY ?? y) + 6
+
+  // Totals
+  const summary: [string, string][] = [
+    ['Subtotal', money(quotation.subtotal)],
+    ['Discount', quotation.discount > 0 ? `- ${money(quotation.discount)}` : money(0)],
+    [`Tax / GST (${quotation.taxPercent}%)`, money(quotation.taxAmount)],
+  ]
+  const boxW = 82
+  const boxX = PAGE_W - M - boxW
+  const rowH = 5.8
+  const boxH = summary.length * rowH + 9
+
+  doc.setFillColor(...LIGHT)
+  doc.setDrawColor(...LINE)
+  doc.setLineWidth(0.25)
+  doc.roundedRect(boxX, y, boxW, boxH, 1.6, 1.6, 'FD')
+
+  let ty = y + 6
+  summary.forEach(([label, value]) => {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8.6)
+    doc.setTextColor(...MUTED)
+    doc.text(clean(label), boxX + 3, ty)
+    doc.setTextColor(...INK)
+    doc.text(clean(value), boxX + boxW - 3, ty, { align: 'right' })
+    ty += rowH
+  })
+  doc.setDrawColor(...LINE)
+  doc.setLineWidth(0.25)
+  doc.line(boxX + 3, ty - 3.2, boxX + boxW - 3, ty - 3.2)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(10)
+  doc.setTextColor(...BRAND)
+  doc.text('Grand Total', boxX + 3, ty + 1.2)
+  doc.text(money(quotation.totalAmount), boxX + boxW - 3, ty + 1.2, { align: 'right' })
+
+  y += boxH + 6
+
+  // Notes / terms
+  if (quotation.notes?.trim()) {
+    y = pageBreakIfNeeded(doc, y, 25)
+    y = textBlock(doc, y, 'Notes', quotation.notes)
+  }
+  if (settings.terms?.trim()) {
+    y = pageBreakIfNeeded(doc, y, 30)
+    y = sectionTitle(doc, 'Terms & Conditions', y)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7.6)
+    doc.setTextColor(...MUTED)
+    const lines = settings.terms
+      .split('\n')
+      .flatMap((line) => doc.splitTextToSize(clean(line), CONTENT_W) as string[])
+    doc.text(lines, M, y)
+    y += lines.length * 3.3 + 6
+  }
+
+  // Signatures
+  y = pageBreakIfNeeded(doc, y, 26)
+  doc.setDrawColor(...LINE)
+  doc.setLineWidth(0.3)
+  doc.line(M, y + 10, M + 55, y + 10)
+  doc.line(PAGE_W - M - 55, y + 10, PAGE_W - M, y + 10)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.8)
+  doc.setTextColor(...MUTED)
+  doc.text('Customer Acceptance (Sign & Date)', M, y + 14)
+  doc.text(`For ${clean(settings.name)}`, PAGE_W - M, y + 14, { align: 'right' })
+
+  return doc
+}
+
+/* ------------------------------------------------------------------ */
+/* Modern documents (invoice / receipt / history)                      */
+/* ------------------------------------------------------------------ */
+
+function buildModernDocument(input: DocInput): jsPDF {
   const { service, customer, parts, settings, kind } = input
   const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true })
   doc.setProperties({
@@ -534,8 +1061,13 @@ export function buildDocument(input: DocInput): jsPDF {
 }
 
 /* ------------------------------------------------------------------ */
-/* Output helpers                                                      */
+/* Main builder + output helpers                                       */
 /* ------------------------------------------------------------------ */
+
+export function buildDocument(input: DocInput): jsPDF {
+  if (input.kind === 'report') return buildChallanDocument(input)
+  return buildModernDocument(input)
+}
 
 export function documentFilename(input: DocInput): string {
   const prefix = input.kind === 'invoice' ? 'Invoice' : input.kind === 'receipt' ? 'Receipt' : 'ServiceReport'
@@ -596,6 +1128,25 @@ export function printDocument(input: DocInput): Promise<void> {
 
 export function pdfFile(input: DocInput): File {
   return new File([documentBlob(input)], documentFilename(input), { type: 'application/pdf' })
+}
+
+/* Quotation output helpers */
+
+export function quotationFilename(input: QuotationDocInput): string {
+  const safeName = input.customer.name.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '')
+  return `Quotation-${input.quotation.code}-${safeName}.pdf`
+}
+
+export function downloadQuotation(input: QuotationDocInput) {
+  buildQuotationDocument(input).save(quotationFilename(input))
+}
+
+export function quotationBlob(input: QuotationDocInput): Blob {
+  return buildQuotationDocument(input).output('blob')
+}
+
+export function quotationObjectUrl(input: QuotationDocInput): string {
+  return URL.createObjectURL(quotationBlob(input))
 }
 
 /**

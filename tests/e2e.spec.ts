@@ -101,7 +101,7 @@ test('Test 1-9: full customer → service → PDF → persistence workflow', asy
   const text = extractPdfText(raw)
   for (const needle of [
     'TECH CITY TECHNOLOGY',
-    'SERVICE REPORT',
+    'SERVICE / INSTALLATION REPORT',
     'Ravi Kumar',
     '9876543210',
     'TC-SRV-00001',
@@ -109,12 +109,10 @@ test('Test 1-9: full customer → service → PDF → persistence workflow', asy
     'Hikvision',
     'HK7108-22910',
     'Suresh',
-    '1,400.00',
-    '400.00',
   ]) {
     expect(text, `PDF should contain "${needle}"`).toContain(needle)
   }
-  console.log('✓ Test 4b: PDF contains all customer and service information')
+  console.log('✓ Test 4b: challan report PDF contains customer, device and service information')
 
   // ---------- Test 5: refresh — data must persist ----------
   await page.reload()

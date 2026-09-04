@@ -55,7 +55,17 @@ export async function updateCustomer(id: string, patch: Partial<Customer>): Prom
 export async function deleteCustomer(id: string) {
   await db.transaction(
     'rw',
-    [db.customers, db.customerContacts, db.services, db.serviceParts, db.payments, db.equipment, db.reminders],
+    [
+      db.customers,
+      db.customerContacts,
+      db.services,
+      db.serviceParts,
+      db.payments,
+      db.equipment,
+      db.reminders,
+      db.calls,
+      db.quotations,
+    ],
     async () => {
       await db.customerContacts.where('customerId').equals(id).delete()
       const services = await db.services.where('customerId').equals(id).toArray()
@@ -67,6 +77,8 @@ export async function deleteCustomer(id: string) {
       await db.services.where('customerId').equals(id).delete()
       await db.equipment.where('customerId').equals(id).delete()
       await db.reminders.where('customerId').equals(id).delete()
+      await db.calls.where('customerId').equals(id).delete()
+      await db.quotations.where('customerId').equals(id).delete()
       await db.customers.delete(id)
     },
   )

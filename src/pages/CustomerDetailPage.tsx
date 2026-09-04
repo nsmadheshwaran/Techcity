@@ -14,6 +14,7 @@ import {
   Pencil,
   Phone,
   Plus,
+  ScrollText,
   Trash2,
   Wrench,
 } from 'lucide-react'
@@ -26,6 +27,7 @@ import { EmptyState, LoadingState } from '@/components/ui/States'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useToast } from '@/components/ui/Toast'
 import {
+  useCalls,
   useCustomer,
   useCustomerContacts,
   useCustomerServices,
@@ -57,11 +59,14 @@ export default function CustomerDetailPage() {
   const services = useCustomerServices(id)
   const equipment = useEquipment(id)
   const reminders = useReminders(id)
+  const calls = useCalls(id)
   const payments = usePayments({ customerId: id })
   const settings = useSettings()
   const [editOpen, setEditOpen] = useState(false)
   const [equipmentOpen, setEquipmentOpen] = useState(false)
-  const [tab, setTab] = useState<'contacts' | 'history' | 'timeline' | 'equipment' | 'reminders'>('contacts')
+  const [tab, setTab] = useState<
+    'contacts' | 'history' | 'timeline' | 'equipment' | 'reminders' | 'calls'
+  >('contacts')
   const [showPassword, setShowPassword] = useState(false)
   const [reportMonth, setReportMonth] = useState(monthKey())
 
@@ -193,6 +198,9 @@ export default function CustomerDetailPage() {
             <button className="btn-secondary" onClick={() => setEditOpen(true)}>
               <Pencil size={15} /> <span className="hidden sm:inline">Edit</span>
             </button>
+            <Link className="btn-secondary" to={`/quotations/new?customerId=${customer.id}`}>
+              <ScrollText size={15} /> <span className="hidden sm:inline">Quotation</span>
+            </Link>
             <button className="btn-secondary text-red-600 hover:bg-red-50" onClick={onDelete}>
               <Trash2 size={15} /> <span className="hidden sm:inline">Delete</span>
             </button>
@@ -245,6 +253,25 @@ export default function CustomerDetailPage() {
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8" /><path d="M12 17v4" /></svg>
                   </span>
                   <dd className="text-ink-700">GST: {customer.gstNumber}</dd>
+                </div>
+              )}
+              {customer.complaintDate && (
+                <div className="flex items-start gap-2.5">
+                  <CalendarClock size={15} className="mt-0.5 shrink-0 text-ink-400" />
+                  <dd className="text-ink-700">
+                    Complaint attended: {formatDateLong(customer.complaintDate)}
+                  </dd>
+                </div>
+              )}
+              {(customer.amcType || customer.amcStartDate || customer.amcYears) && (
+                <div className="flex items-start gap-2.5">
+                  <CalendarClock size={15} className="mt-0.5 shrink-0 text-ink-400" />
+                  <dd className="text-ink-700">
+                    AMC: {customer.amcType || 'Contract'}
+                    {customer.amcYears ? ` · ${customer.amcYears} yr${customer.amcYears > 1 ? 's' : ''}` : ''}
+                    {customer.amcStartDate ? ` · from ${formatDate(customer.amcStartDate)}` : ''}
+                    {customer.amcExpiry ? ` till ${formatDate(customer.amcExpiry)}` : ''}
+                  </dd>
                 </div>
               )}
               {(customer.address || customer.city) && (
@@ -398,6 +425,7 @@ export default function CustomerDetailPage() {
                   ['timeline', 'Timeline'],
                   ['equipment', `Equipment (${equipment?.length ?? 0})`],
                   ['reminders', `Reminders (${(reminders ?? []).filter((r) => !r.done).length})`],
+                  ['calls', `Calls (${calls?.length ?? 0})`],
                 ] as const
               ).map(([key, label]) => (
                 <button
@@ -580,6 +608,48 @@ export default function CustomerDetailPage() {
                 )}
               </>
             )}
+
+            {tab === 'calls' &&
+              (!calls?.length ? (
+                <EmptyState
+                  icon={Phone}
+                  title="No calls logged"
+                  message="Log enquiries for this customer in the Call Log — online, direct or demo."
+                  action={
+                    <Link to="/calls" className="btn-primary">
+                      Open Call Log
+                    </Link>
+                  }
+                />
+              ) : (
+                <ul className="divide-y divide-ink-100">
+                  {calls.map((c) => (
+                    <li key={c.id} className="flex items-start gap-3 px-4 py-3">
+                      <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-ink-100 text-ink-500">
+                        <Phone size={15} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <p className="text-[14px] font-semibold text-ink-900">{c.name}</p>
+                          <span className="badge border-brand-100 bg-brand-50 text-brand-700">
+                            {c.source}
+                          </span>
+                          <span className="badge border-ink-200 bg-ink-100 text-ink-600">
+                            {c.status}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-[12.5px] text-ink-500">
+                          {formatDate(c.date)}
+                          {c.phone ? ` · ${c.phone}` : ''}
+                        </p>
+                        {c.notes && (
+                          <p className="mt-1 text-[12.5px] leading-relaxed text-ink-600">{c.notes}</p>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ))}
 
             {tab === 'reminders' &&
               (!reminders?.length ? (

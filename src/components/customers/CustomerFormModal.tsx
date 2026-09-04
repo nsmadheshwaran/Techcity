@@ -7,6 +7,7 @@ import { createCustomer, updateCustomer } from '@/services/customers'
 import { saveContactsFor } from '@/services/contacts'
 import { getContactsFor } from '@/services/contacts'
 import type { Customer } from '@/types'
+import { addMonths } from '@/utils/format'
 import { hasErrors, validateCustomer, type Errors } from '@/utils/validation'
 
 interface Props {
@@ -36,6 +37,10 @@ const BLANK = {
   pincode: '',
   gstNumber: '',
   password: '',
+  complaintDate: '',
+  amcType: '',
+  amcStartDate: '',
+  amcYears: '',
   notes: '',
 }
 
@@ -62,6 +67,10 @@ export function CustomerFormModal({ open, onClose, onSaved, customer, initial }:
         pincode: customer.pincode ?? '',
         gstNumber: customer.gstNumber ?? '',
         password: customer.password ?? '',
+        complaintDate: customer.complaintDate ?? '',
+        amcType: customer.amcType ?? '',
+        amcStartDate: customer.amcStartDate ?? '',
+        amcYears: customer.amcYears ? String(customer.amcYears) : '',
         notes: customer.notes ?? '',
       })
       getContactsFor(customer.id).then((rows) =>
@@ -115,6 +124,14 @@ export function CustomerFormModal({ open, onClose, onSaved, customer, initial }:
         pincode: form.pincode.trim() || undefined,
         gstNumber: form.gstNumber.trim() || undefined,
         password: form.password.trim() || undefined,
+        complaintDate: form.complaintDate || undefined,
+        amcType: form.amcType.trim() || undefined,
+        amcStartDate: form.amcStartDate || undefined,
+        amcYears: form.amcYears ? Math.max(1, Number(form.amcYears)) || undefined : undefined,
+        amcExpiry:
+          form.amcStartDate && form.amcYears
+            ? addMonths(form.amcStartDate, (Number(form.amcYears) || 1) * 12)
+            : undefined,
         notes: form.notes.trim() || undefined,
       }
       let saved: Customer
@@ -293,6 +310,41 @@ export function CustomerFormModal({ open, onClose, onSaved, customer, initial }:
           onChange={(e) => set('pincode')(e.target.value)}
           error={errors.pincode}
           placeholder="641001"
+        />
+        <div className="sm:col-span-2">
+          <p className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-ink-400">
+            AMC & Complaint Tracking
+          </p>
+        </div>
+        <TextField
+          label="AMC Type"
+          value={form.amcType}
+          onChange={(e) => set('amcType')(e.target.value)}
+          placeholder="e.g. CCTV AMC / Desktop AMC"
+        />
+        <TextField
+          label="AMC Start Date"
+          type="date"
+          value={form.amcStartDate}
+          onChange={(e) => set('amcStartDate')(e.target.value)}
+        />
+        <TextField
+          label="AMC Years"
+          inputMode="numeric"
+          value={form.amcYears}
+          onChange={(e) => set('amcYears')(e.target.value)}
+          placeholder="1"
+          hint={
+            form.amcStartDate && form.amcYears
+              ? `Expires on ${addMonths(form.amcStartDate, (Number(form.amcYears) || 1) * 12)}`
+              : 'Duration of the maintenance contract'
+          }
+        />
+        <TextField
+          label="Last Complaint Attended"
+          type="date"
+          value={form.complaintDate}
+          onChange={(e) => set('complaintDate')(e.target.value)}
         />
         <TextAreaField
           label="Notes"

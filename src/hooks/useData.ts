@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useMemo } from 'react'
 import { db, DEFAULT_SETTINGS, sortContacts, sortParts } from '@/lib/db'
-import type { Customer, CustomerContact, CustomerWithStats, Service } from '@/types'
+import type { Customer, CustomerContact, CustomerWithStats, Quotation, Service } from '@/types'
 import { computeStats } from '@/services/customers'
 
 /**
@@ -96,6 +96,34 @@ export function useReminders(customerId?: string) {
       : await db.reminders.toArray()
     return rows.sort((a, b) => a.dueDate.localeCompare(b.dueDate))
   }, [customerId])
+}
+
+export function useCalls(customerId?: string) {
+  return useLiveQuery(async () => {
+    const rows = customerId
+      ? await db.calls.where('customerId').equals(customerId).toArray()
+      : await db.calls.toArray()
+    return rows.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
+  }, [customerId])
+}
+
+export function useQuotations() {
+  return useLiveQuery(() => db.quotations.orderBy('date').reverse().toArray(), [])
+}
+
+export function useQuotation(id?: string) {
+  return useLiveQuery(async () => (id ? db.quotations.get(id) : undefined), [id])
+}
+
+/** Quotations joined with their customer for list views. */
+export function useQuotationsWithCustomer(): (Quotation & { customer?: Customer })[] | undefined {
+  const quotations = useQuotations()
+  const customers = useCustomers()
+  return useMemo(() => {
+    if (!quotations || !customers) return undefined
+    const map = new Map(customers.map((c) => [c.id, c]))
+    return quotations.map((q) => ({ ...q, customer: map.get(q.customerId) }))
+  }, [quotations, customers])
 }
 
 /** Customers joined with their aggregated service/payment figures. */

@@ -102,7 +102,7 @@ test('v1 database upgrades to v2 without losing data', async ({ page }) => {
     db.close()
     return { version, positions: rows.map((r: { name: string; position?: number }) => [r.name, r.position]) }
   })
-  expect(positions.version).toBe(3)
+  expect(positions.version).toBe(4)
   expect(positions.positions.sort((a: [string, number], b: [string, number]) => a[1] - b[1]))
     .toEqual([['Zulu Camera', 0], ['Alpha Cable', 1], ['Mike Adapter', 2]])
   console.log(`✓ Database upgraded to v${positions.version} and positions were backfilled 0,1,2`)

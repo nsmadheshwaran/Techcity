@@ -1,6 +1,6 @@
 import { db, getSettings, sortParts } from '@/lib/db'
 import type { CustomerContact } from '@/types'
-import type { Customer, Equipment, Payment, Reminder, Service, ServicePart } from '@/types'
+import type { Call, Customer, Equipment, Payment, Quotation, Reminder, Service, ServicePart } from '@/types'
 import { downloadCSV, downloadJSON, timestampSuffix } from '@/utils/csv'
 
 export interface BackupFile {
@@ -15,29 +15,56 @@ export interface BackupFile {
     equipment: Equipment[]
     reminders: Reminder[]
     customerContacts: CustomerContact[]
+    calls: Call[]
+    quotations: Quotation[]
     settings: unknown[]
     counters: { key: string; value: number }[]
   }
 }
 
 export async function buildBackup(): Promise<BackupFile> {
-  const [customers, services, serviceParts, payments, equipment, reminders, customerContacts, settings, counters] =
-    await Promise.all([
-      db.customers.toArray(),
-      db.services.toArray(),
-      db.serviceParts.toArray(),
-      db.payments.toArray(),
-      db.equipment.toArray(),
-      db.reminders.toArray(),
-      db.customerContacts.toArray(),
-      db.settings.toArray(),
-      db.counters.toArray(),
-    ])
+  const [
+    customers,
+    services,
+    serviceParts,
+    payments,
+    equipment,
+    reminders,
+    customerContacts,
+    calls,
+    quotations,
+    settings,
+    counters,
+  ] = await Promise.all([
+    db.customers.toArray(),
+    db.services.toArray(),
+    db.serviceParts.toArray(),
+    db.payments.toArray(),
+    db.equipment.toArray(),
+    db.reminders.toArray(),
+    db.customerContacts.toArray(),
+    db.calls.toArray(),
+    db.quotations.toArray(),
+    db.settings.toArray(),
+    db.counters.toArray(),
+  ])
   return {
     app: 'tech-city-technology',
     version: 1,
     exportedAt: new Date().toISOString(),
-    data: { customers, services, serviceParts, payments, equipment, reminders, customerContacts, settings, counters },
+    data: {
+      customers,
+      services,
+      serviceParts,
+      payments,
+      equipment,
+      reminders,
+      customerContacts,
+      calls,
+      quotations,
+      settings,
+      counters,
+    },
   }
 }
 
@@ -69,6 +96,8 @@ export async function restoreBackup(raw: string) {
       db.equipment,
       db.reminders,
       db.customerContacts,
+      db.calls,
+      db.quotations,
       db.settings,
       db.counters,
     ],
@@ -81,6 +110,8 @@ export async function restoreBackup(raw: string) {
         db.equipment.clear(),
         db.reminders.clear(),
         db.customerContacts.clear(),
+        db.calls.clear(),
+        db.quotations.clear(),
         db.counters.clear(),
       ])
       if (d.customers?.length) await db.customers.bulkAdd(d.customers)
@@ -90,6 +121,8 @@ export async function restoreBackup(raw: string) {
       if (d.equipment?.length) await db.equipment.bulkAdd(d.equipment)
       if (d.reminders?.length) await db.reminders.bulkAdd(d.reminders)
       if (d.customerContacts?.length) await db.customerContacts.bulkAdd(d.customerContacts)
+      if (d.calls?.length) await db.calls.bulkAdd(d.calls)
+      if (d.quotations?.length) await db.quotations.bulkAdd(d.quotations)
       if (d.counters?.length) await db.counters.bulkAdd(d.counters)
       if (d.settings?.length)
         await db.settings.bulkPut(d.settings as Awaited<ReturnType<typeof getSettings>>[])
@@ -233,6 +266,8 @@ export async function wipeAllData() {
     db.payments.clear(),
     db.equipment.clear(),
     db.reminders.clear(),
+    db.calls.clear(),
+    db.quotations.clear(),
     db.counters.clear(),
   ])
 }

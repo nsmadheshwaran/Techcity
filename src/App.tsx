@@ -17,6 +17,9 @@ import ServiceFormPage from '@/pages/ServiceFormPage'
 import ServiceDetailPage from '@/pages/ServiceDetailPage'
 import ReportsPage from '@/pages/ReportsPage'
 import EquipmentPage from '@/pages/EquipmentPage'
+import CallsPage from '@/pages/CallsPage'
+import QuotationsPage from '@/pages/QuotationsPage'
+import QuotationFormPage from '@/pages/QuotationFormPage'
 import RemindersPage from '@/pages/RemindersPage'
 import PaymentsPage from '@/pages/PaymentsPage'
 import SettingsPage from '@/pages/SettingsPage'
@@ -40,6 +43,10 @@ const router = createHashRouter([
       { path: 'services/:id', element: <ServiceDetailPage /> },
       { path: 'reports', element: <ReportsPage /> },
       { path: 'equipment', element: <EquipmentPage /> },
+      { path: 'calls', element: <CallsPage /> },
+      { path: 'quotations', element: <QuotationsPage /> },
+      { path: 'quotations/new', element: <QuotationFormPage /> },
+      { path: 'quotations/:id/edit', element: <QuotationFormPage /> },
       { path: 'reminders', element: <RemindersPage /> },
       { path: 'payments', element: <PaymentsPage /> },
       { path: 'settings', element: <SettingsPage /> },

@@ -37,6 +37,16 @@ export interface Customer extends BaseRow {
   password?: string
   notes?: string
   dateAdded: string // yyyy-mm-dd
+  /** Date the latest complaint was attended (yyyy-mm-dd). */
+  complaintDate?: string
+  /** AMC (Annual Maintenance Contract) type, e.g. "CCTV AMC" / "Desktop AMC". */
+  amcType?: string
+  /** AMC duration in years. */
+  amcYears?: number
+  /** When the current AMC started (yyyy-mm-dd). */
+  amcStartDate?: string
+  /** When the current AMC expires (yyyy-mm-dd) — derived from start date + years. */
+  amcExpiry?: string
 }
 
 /**
@@ -215,6 +225,59 @@ export interface AppUser {
 }
 
 /* ------------------------------------------------------------------ */
+/* Calls (call book / call log)                                        */
+/* ------------------------------------------------------------------ */
+
+export const CALL_SOURCES = ['Online', 'Direct', 'Demo'] as const
+export type CallSource = (typeof CALL_SOURCES)[number]
+
+export const CALL_STATUSES = ['New', 'Follow Up', 'Completed', 'No Response'] as const
+export type CallStatus = (typeof CALL_STATUSES)[number]
+
+/** A logged enquiry / call — online enquiry, direct walk-in or a demo. */
+export interface Call extends BaseRow {
+  date: string // yyyy-mm-dd
+  source: CallSource
+  status: CallStatus
+  /** Linked saved customer (optional — the caller may be a new lead). */
+  customerId?: ID
+  name: string
+  phone?: string
+  notes?: string
+}
+
+/* ------------------------------------------------------------------ */
+/* Quotations                                                          */
+/* ------------------------------------------------------------------ */
+
+export const QUOTATION_STATUSES = ['Draft', 'Sent', 'Accepted', 'Expired'] as const
+export type QuotationStatus = (typeof QUOTATION_STATUSES)[number]
+
+export interface QuotationItem {
+  id: string
+  name: string
+  quantity: number
+  unitPrice: number
+  amount: number // quantity × unitPrice
+}
+
+/** A quotation built from a customer's saved details. */
+export interface Quotation extends BaseRow {
+  code: string // TC-QTN-00001
+  customerId: ID
+  date: string // yyyy-mm-dd
+  validUntil?: string // yyyy-mm-dd
+  status: QuotationStatus
+  items: QuotationItem[]
+  discount: number
+  taxPercent: number
+  subtotal: number
+  taxAmount: number
+  totalAmount: number
+  notes?: string
+}
+
+/* ------------------------------------------------------------------ */
 /* View models                                                         */
 /* ------------------------------------------------------------------ */
 
@@ -235,4 +298,8 @@ export interface ServiceWithCustomer extends Service {
   customer?: Customer
 }
 
-export type DocKind = 'report' | 'invoice' | 'receipt' | 'history'
+export interface QuotationWithCustomer extends Quotation {
+  customer?: Customer
+}
+
+export type DocKind = 'report' | 'invoice' | 'receipt' | 'history' | 'quotation'

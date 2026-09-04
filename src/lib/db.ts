@@ -2,10 +2,12 @@ import Dexie, { type Table } from 'dexie'
 import type {
   AppUser,
   BusinessSettings,
+  Call,
   Customer,
   CustomerContact,
   Equipment,
   Payment,
+  Quotation,
   Reminder,
   Service,
   ServicePart,
@@ -16,11 +18,12 @@ import type {
  *
  * Tables mirror the SQL schema in `supabase/schema.sql` one-to-one, so the app can be
  * migrated to Supabase/Postgres without changing the domain model.
- *
- *   customers 1─┬─* services ─┬─* service_parts
- *               │             └─* payments
- *               ├─* equipment
- *               └─* reminders
+ *   *   customers 1─┬─* services ─┬─* service_parts
+   *               │             └─* payments
+   *               ├─* equipment
+   *               ├─* calls
+   *               ├─* quotations
+   *               └─* reminders
  *
  * Data is stored in the browser's IndexedDB, which persists across refreshes,
  * restarts and offline use. Use Settings → Backup to export/import JSON + CSV.
@@ -33,6 +36,8 @@ export class TechCityDB extends Dexie {
   payments!: Table<Payment, string>
   equipment!: Table<Equipment, string>
   reminders!: Table<Reminder, string>
+  calls!: Table<Call, string>
+  quotations!: Table<Quotation, string>
   settings!: Table<BusinessSettings, string>
   users!: Table<AppUser, string>
   counters!: Table<{ key: string; value: number }, string>
@@ -67,6 +72,14 @@ export class TechCityDB extends Dexie {
       services:
         'id, code, customerId, serviceDate, serviceType, status, serviceMode, paymentStatus, nextServiceDate, warrantyExpiry, createdAt, isDemo',
       customerContacts: 'id, customerId, position, createdAt',
+    })
+
+    // v4 — call book (calls table) and quotations. Customers also gained
+    // AMC / complaint-attended columns — those are additive row fields, so
+    // no index change is needed (undefined = not set).
+    this.version(4).stores({
+      calls: 'id, date, source, customerId, status, createdAt',
+      quotations: 'id, code, customerId, date, status, createdAt',
     })
   }
 }
@@ -118,15 +131,16 @@ export function nowISO(): string {
  * Runs inside a Dexie transaction so two concurrent creates can never collide.
  * Falls back to scanning existing rows so codes stay unique even after an import.
  */
-export async function nextCode(kind: 'customer' | 'service' | 'equipment' | 'invoice') {
+export async function nextCode(kind: 'customer' | 'service' | 'equipment' | 'invoice' | 'quotation') {
   const config = {
     customer: { key: 'customer', prefix: 'TC-CUS-', table: db.customers },
     service: { key: 'service', prefix: 'TC-SRV-', table: db.services },
     equipment: { key: 'equipment', prefix: 'TC-EQP-', table: db.equipment },
     invoice: { key: 'invoice', prefix: 'TC-INV-', table: null },
+    quotation: { key: 'quotation', prefix: 'TC-QTN-', table: db.quotations },
   }[kind]
 
-  return db.transaction('rw', db.counters, db.customers, db.services, db.equipment, async () => {
+  return db.transaction('rw', db.counters, db.customers, db.services, db.equipment, db.quotations, async () => {
     const row = await db.counters.get(config.key)
     let next = (row?.value ?? 0) + 1
 
