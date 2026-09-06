@@ -341,25 +341,6 @@ create policy "settings_owner_all" on public.business_settings
 -- =====================================================================
 --  Handy reporting views
 -- =====================================================================
-create or replace view public.customer_summary as
-select
-  c.id,
-  c.owner_id,
-  c.code,
-  c.name,
-  c.phone,
-  count(s.id)                                      as total_services,
-  coalesce(sum(s.total_amount), 0)                 as total_spent,
-  coalesce(sum(s.amount_paid), 0)                  as total_paid,
-  greatest(0, coalesce(sum(s.balance), 0))         as outstanding,
-  max(s.service_date)                              as last_service_date,
-  min(s.next_service_date) filter (where s.next_service_date >= current_date)
-                                                   as next_service_date
-from public.customers c
-left join public.services s
-       on s.customer_id = c.id and s.status <> 'Cancelled'
-group by c.id;
-
 create or replace view public.upcoming_reminders as
 select r.*, c.name as customer_name, c.phone as customer_phone
 from public.reminders r
@@ -411,8 +392,9 @@ create policy "customer_contacts_owner_all" on public.customer_contacts
   using      (owner_id = auth.uid())
   with check  (owner_id = auth.uid());
 
--- Extend the reporting view
-create or replace view public.customer_summary as
+-- Extend the reporting view (drop + recreate so this file stays safe to re-run)
+drop view if exists public.customer_summary;
+create view public.customer_summary as
 select
   c.id,
   c.owner_id,
