@@ -2,12 +2,16 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   CalendarClock,
+  ChevronDown,
+  ChevronRight,
   Pencil,
   Phone,
   Plus,
+  Rows3,
   Search,
   Trash2,
   Users,
+  Wrench,
   X,
 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
@@ -25,7 +29,7 @@ import {
   type CallSource,
   type CallStatus,
 } from '@/types'
-import { formatDate } from '@/utils/format'
+import { formatDate, initials } from '@/utils/format'
 
 const SOURCE_STYLES: Record<CallSource, string> = {
   Online: 'border-emerald-200 bg-emerald-50 text-emerald-700',
@@ -53,6 +57,18 @@ const STATUS_ACTIVE: Record<CallStatus, string> = {
   'No Response': 'border-ink-700 bg-ink-700 text-white',
 }
 
+/** Start a service straight from a booked call — the call is closed out when the service is saved. */
+const serviceHref = (c: Call) => `/services/new?callId=${c.id}${c.customerId ? `&customerId=${c.customerId}` : ''}`
+
+/** One customer (or new lead) with all their calls, for the Call View. */
+interface CallGroup {
+  key: string
+  title: string
+  phone?: string
+  customerId?: string
+  calls: Call[]
+}
+
 export default function CallsPage() {
   const toast = useToast()
   const confirm = useConfirm()
@@ -65,6 +81,9 @@ export default function CallsPage() {
   const [status, setStatus] = useState<'all' | CallStatus>('all')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
+  /** 'list' = every call one by one; 'call' = grouped per customer/lead. */
+  const [view, setView] = useState<'list' | 'call'>('list')
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set())
 
   const counts = useMemo(() => {
     const c = { total: 0 } as Record<string, number>
@@ -93,6 +112,43 @@ export default function CallsPage() {
       )
     })
   }, [calls, query, source, status, from, to, customerMap])
+
+  /**
+   * Call View — the same filtered calls grouped by customer (or by caller name
+   * when the call is a new lead without a saved customer), newest call first.
+   */
+  const groups = useMemo(() => {
+    const map = new Map<string, CallGroup>()
+    for (const c of filtered) {
+      const key = c.customerId ?? `lead:${c.name.trim().toLowerCase()}`
+      const title = c.customerId ? (customerMap.get(c.customerId)?.name ?? c.name) : c.name
+      const phone = c.customerId ? customerMap.get(c.customerId)?.phone : c.phone
+      const group = map.get(key)
+      if (group) {
+        group.calls.push(c)
+        if (!group.phone && phone) group.phone = phone
+        if (!group.customerId && c.customerId) group.customerId = c.customerId
+      } else {
+        map.set(key, { key, title, phone, customerId: c.customerId, calls: [c] })
+      }
+    }
+    const list = [...map.values()]
+    for (const g of list) {
+      g.calls.sort(
+        (a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt),
+      )
+    }
+    list.sort((a, b) => b.calls[0].date.localeCompare(a.calls[0].date))
+    return list
+  }, [filtered, customerMap])
+
+  const toggleGroup = (key: string) =>
+    setOpenGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
 
   async function changeStatus(call: Call, next: CallStatus) {
     try {
@@ -187,6 +243,26 @@ export default function CallsPage() {
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
+          <div className="flex overflow-hidden rounded-lg border border-ink-300" role="group" aria-label="Switch view">
+            <button
+              type="button"
+              className={`inline-flex items-center gap-1.5 px-3 py-2 text-[12.5px] font-medium transition-colors ${
+                view === 'list' ? 'bg-ink-900 text-white' : 'bg-white text-ink-600 hover:bg-ink-50'
+              }`}
+              onClick={() => setView('list')}
+            >
+              <Rows3 size={14} /> All Calls
+            </button>
+            <button
+              type="button"
+              className={`inline-flex items-center gap-1.5 border-l border-ink-300 px-3 py-2 text-[12.5px] font-medium transition-colors ${
+                view === 'call' ? 'bg-ink-900 text-white' : 'bg-white text-ink-600 hover:bg-ink-50'
+              }`}
+              onClick={() => setView('call')}
+            >
+              <Users size={14} /> Call View
+            </button>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <input
@@ -238,6 +314,18 @@ export default function CallsPage() {
         <div className="card">
           <EmptyState icon={Search} title="No calls match" message="Try different filters." />
         </div>
+      ) : view === 'call' ? (
+        <CallView
+          groups={groups}
+          openKeys={openGroups}
+          onToggle={toggleGroup}
+          onStatusChange={changeStatus}
+          onEdit={(c) => {
+            setEditing(c)
+            setModalOpen(true)
+          }}
+          onDelete={onDelete}
+        />
       ) : (
         <>
           {/* Desktop table */}
@@ -323,6 +411,14 @@ export default function CallsPage() {
                       </td>
                       <td className="table-td">
                         <div className="flex justify-end gap-1">
+                          <Link
+                            to={serviceHref(c)}
+                            className="btn-ghost px-2 py-1.5"
+                            title="Book a service from this call"
+                            aria-label="Book a service from this call"
+                          >
+                            <Wrench size={15} />
+                          </Link>
                           {linked && (
                             <Link
                               to={`/customers/${linked.id}`}
@@ -417,6 +513,13 @@ export default function CallsPage() {
                         ))}
                       </select>
                       <div className="mt-1 flex gap-1">
+                        <Link
+                          to={serviceHref(c)}
+                          className="btn-ghost px-2 py-1.5"
+                          aria-label="Book a service from this call"
+                        >
+                          <Wrench size={15} />
+                        </Link>
                         <button
                           className="btn-ghost px-2 py-1.5"
                           onClick={() => {
@@ -453,5 +556,140 @@ export default function CallsPage() {
         call={editing}
       />
     </>
+  )
+}
+
+/**
+ * Call View — calls grouped per customer so the owner can see every
+ * conversation with one customer in a single place and turn a booked call
+ * into a service with one tap.
+ */
+function CallView({
+  groups,
+  openKeys,
+  onToggle,
+  onStatusChange,
+  onEdit,
+  onDelete,
+}: {
+  groups: CallGroup[]
+  openKeys: Set<string>
+  onToggle: (key: string) => void
+  onStatusChange: (call: Call, next: CallStatus) => void
+  onEdit: (call: Call) => void
+  onDelete: (call: Call) => void
+}) {
+  return (
+    <div className="space-y-2.5">
+      {groups.map((g) => {
+        const open = openKeys.has(g.key)
+        const openCount = g.calls.filter((c) => c.status !== 'Completed' && c.status !== 'No Response').length
+        return (
+          <section key={g.key} className="card overflow-hidden">
+            <button
+              type="button"
+              onClick={() => onToggle(g.key)}
+              className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-ink-50"
+              aria-expanded={open}
+            >
+              {open ? (
+                <ChevronDown size={16} className="shrink-0 text-ink-400" />
+              ) : (
+                <ChevronRight size={16} className="shrink-0 text-ink-400" />
+              )}
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[12px] font-semibold text-brand-700">
+                {initials(g.title)}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <span className="truncate text-[14px] font-semibold text-ink-900">{g.title}</span>
+                  {openCount > 0 && (
+                    <span className="badge border-red-200 bg-red-50 text-red-700">
+                      {openCount} open
+                    </span>
+                  )}
+                  <span className="badge border-ink-200 bg-ink-100 text-ink-600">
+                    {g.calls.length} call{g.calls.length === 1 ? '' : 's'}
+                  </span>
+                </span>
+                {g.phone && <span className="mt-0.5 block text-[12px] text-ink-500">{g.phone}</span>}
+              </span>
+              {g.customerId && (
+                <Link
+                  to={`/customers/${g.customerId}`}
+                  className="btn-ghost shrink-0 px-2 py-1.5 text-[12.5px]"
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label="Open customer profile"
+                >
+                  <Users size={15} />
+                </Link>
+              )}
+            </button>
+
+            {open && (
+              <ul className="divide-y divide-ink-100 border-t border-ink-100">
+                {g.calls.map((c) => (
+                  <li key={c.id} className="px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className={`badge ${SOURCE_STYLES[c.source]}`}>{c.source}</span>
+                      <span className={`badge ${STATUS_STYLES[c.status]}`}>{c.status}</span>
+                      {c.priority && (
+                        <span className={`badge ${PRIORITY_STYLES[c.priority]}`}>{c.priority}</span>
+                      )}
+                      <span className="text-[12.5px] text-ink-500">{formatDate(c.date)}</span>
+                      {c.appointmentDate && (
+                        <span className="inline-flex items-center gap-1 text-[12px] font-medium text-brand-700">
+                          <CalendarClock size={12} /> Visit {formatDate(c.appointmentDate)}
+                        </span>
+                      )}
+                    </div>
+                    {c.issue && (
+                      <p className="mt-1.5 rounded-lg bg-ink-50 px-2.5 py-1.5 text-[12.5px] text-ink-700">
+                        {c.issue}
+                      </p>
+                    )}
+                    {c.notes && (
+                      <p className="mt-1 text-[12px] leading-relaxed text-ink-500">{c.notes}</p>
+                    )}
+
+                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                      <Link to={serviceHref(c)} className="btn-primary py-1.5 text-[12.5px]">
+                        <Wrench size={13} /> Book Service
+                      </Link>
+                      <select
+                        className="input w-auto py-1 text-[12.5px]"
+                        value={c.status}
+                        aria-label="Update status"
+                        onChange={(e) => onStatusChange(c, e.target.value as CallStatus)}
+                      >
+                        {CALL_STATUSES.map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="btn-ghost px-2 py-1.5"
+                        aria-label="Edit call"
+                        onClick={() => onEdit(c)}
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-ghost px-2 py-1.5 text-red-600 hover:bg-red-50"
+                        aria-label="Delete call"
+                        onClick={() => onDelete(c)}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )
+      })}
+    </div>
   )
 }

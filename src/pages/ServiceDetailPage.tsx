@@ -11,6 +11,7 @@ import {
   Trash2,
   User,
   Wrench,
+  X,
 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { DocumentActions } from '@/components/services/DocumentActions'
@@ -44,6 +45,7 @@ export default function ServiceDetailPage() {
   const [payOpen, setPayOpen] = useState(false)
   const [docKind, setDocKind] = useState<DocKind>('report')
   const [showSuccess, setShowSuccess] = useState(false)
+  const [photoZoom, setPhotoZoom] = useState<string | null>(null)
 
   useEffect(() => {
     if (searchParams.get('created') === '1') {
@@ -280,6 +282,7 @@ export default function ServiceDetailPage() {
                     <thead className="border-b border-ink-200 bg-ink-50/60">
                       <tr>
                         <th className="table-th">Part</th>
+                        <th className="table-th">Photo</th>
                         <th className="table-th text-center">Qty</th>
                         <th className="table-th text-right">Rate</th>
                         <th className="table-th text-right">Amount</th>
@@ -289,6 +292,25 @@ export default function ServiceDetailPage() {
                       {parts.map((p) => (
                         <tr key={p.id}>
                           <td className="table-td">{p.name}</td>
+                          <td className="table-td">
+                            {p.photoDataUrl ? (
+                              <button
+                                type="button"
+                                onClick={() => setPhotoZoom(p.photoDataUrl ?? null)}
+                                className="block h-11 w-11 overflow-hidden rounded-lg border border-ink-200 transition-opacity hover:opacity-80"
+                                title="Tap to view the serial number / label"
+                                aria-label={`View photo of ${p.name}`}
+                              >
+                                <img
+                                  src={p.photoDataUrl}
+                                  alt={`Photo of ${p.name}`}
+                                  className="h-full w-full object-cover"
+                                />
+                              </button>
+                            ) : (
+                              <span className="text-ink-300">—</span>
+                            )}
+                          </td>
                           <td className="table-td text-center">{p.quantity}</td>
                           <td className="table-td text-right">
                             {formatMoney(p.unitPrice, settings.currency)}
@@ -299,7 +321,7 @@ export default function ServiceDetailPage() {
                         </tr>
                       ))}
                       <tr className="bg-ink-50/60">
-                        <td className="table-td font-semibold" colSpan={3}>
+                        <td className="table-td font-semibold" colSpan={4}>
                           Parts total
                         </td>
                         <td className="table-td text-right font-semibold">
@@ -526,6 +548,30 @@ export default function ServiceDetailPage() {
         service={service}
         currency={settings.currency}
       />
+
+      {photoZoom && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/80 p-6 animate-fade-in no-print"
+          onClick={() => setPhotoZoom(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Part photo"
+        >
+          <img
+            src={photoZoom}
+            alt="Part photo"
+            className="max-h-full max-w-full rounded-xl shadow-2xl"
+          />
+          <button
+            type="button"
+            className="absolute right-4 top-4 rounded-lg bg-white/90 p-2 text-ink-700 shadow hover:bg-white"
+            onClick={() => setPhotoZoom(null)}
+            aria-label="Close photo"
+          >
+            <X size={18} />
+          </button>
+        </div>
+      )}
     </>
   )
 }

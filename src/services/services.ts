@@ -42,6 +42,8 @@ export interface PartDraft {
   unitPrice: number
   /** Internal cost per unit (what the shop paid) — never printed on customer documents. */
   costPrice?: number
+  /** Photo of the part (serial plate / label) as a compressed JPEG data URL. */
+  photoDataUrl?: string
 }
 
 export type ServiceDraft = Omit<
@@ -156,6 +158,7 @@ async function savePartsFor(serviceId: string, parts: PartDraft[], isDemo: boole
       costPrice: p.costPrice !== undefined && p.costPrice !== null && Number(p.costPrice) > 0
         ? round2(Number(p.costPrice))
         : undefined,
+      photoDataUrl: p.photoDataUrl?.trim() || undefined,
       createdAt: nowISO(),
       updatedAt: nowISO(),
       isDemo,

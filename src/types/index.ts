@@ -141,6 +141,12 @@ export interface ServicePart extends BaseRow {
   unitPrice: number
   total: number
   /**
+   * Photo of the physical part (serial plate / label), compressed to a JPEG
+   * data URL. Lets the owner zoom in later to read serial numbers of parts
+   * like RAM, printers, DVRs — long after the part was replaced.
+   */
+  photoDataUrl?: string
+  /**
    * Internal cost price per unit — what the shop paid the supplier. Only the
    * owner sees it (customer documents never print it); it powers the
    * buy-vs-sell profit shown on the service record and customer profile.

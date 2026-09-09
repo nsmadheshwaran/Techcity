@@ -750,6 +750,19 @@ export default function CustomerDetailPage() {
                         {c.notes && (
                           <p className="mt-1 text-[12.5px] leading-relaxed text-ink-600">{c.notes}</p>
                         )}
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          {c.status !== 'Completed' && (
+                            <Link
+                              to={`/services/new?callId=${c.id}&customerId=${customer.id}`}
+                              className="btn-primary py-1.5 text-[12.5px]"
+                            >
+                              <Wrench size={13} /> Book Service
+                            </Link>
+                          )}
+                          <Link to="/calls" className="btn-ghost px-2 py-1.5 text-[12.5px]">
+                            Open Call Book
+                          </Link>
+                        </div>
                       </div>
                     </li>
                   ))}

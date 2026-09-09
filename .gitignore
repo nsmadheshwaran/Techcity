@@ -35,3 +35,6 @@ dist-ssr
 /playwright/.cache/
 /test-downloads/
 shot-*.png
+
+.vercel
+.env*

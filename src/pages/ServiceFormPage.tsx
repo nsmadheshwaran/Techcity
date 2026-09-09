@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { Save, Wrench } from 'lucide-react'
+import { PhoneCall, Save, Wrench } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { CustomerPicker } from '@/components/services/CustomerPicker'
 import { PartsEditor } from '@/components/services/PartsEditor'
@@ -14,6 +14,7 @@ import {
 import { LoadingState } from '@/components/ui/States'
 import { useToast } from '@/components/ui/Toast'
 import { useService, useServiceParts, useSettingsWithStatus, useTechnicians } from '@/hooks/useData'
+import { getCall, updateCall } from '@/services/calls'
 import {
   computeTotals,
   createService,
@@ -28,7 +29,7 @@ import {
   type ServiceMode,
   type ServiceStatus,
 } from '@/types'
-import { formatMoney, todayISO, warrantyExpiryFrom } from '@/utils/format'
+import { formatMoney, formatDate, todayISO, warrantyExpiryFrom } from '@/utils/format'
 import { hasErrors, validateService, type Errors } from '@/utils/validation'
 
 const WARRANTY_OPTIONS = [
@@ -93,6 +94,10 @@ export default function ServiceFormPage() {
   const existingParts = useServiceParts(id)
   const isEdit = Boolean(id)
 
+  /** Booked call this service was started from (services/new?callId=…). */
+  const callId = searchParams.get('callId')
+  const [sourceCall, setSourceCall] = useState<Awaited<ReturnType<typeof getCall>>>(undefined)
+
   const [form, setForm] = useState<FormState>(() => ({
     customerId: searchParams.get('customerId') ?? '',
     serviceDate: todayISO(),
@@ -139,6 +144,26 @@ export default function ServiceFormPage() {
     }))
   }, [isEdit, settings, settingsLoaded])
 
+  // Prefill from a booked call (Call Book → “Book Service”): the linked
+  // customer plus the reported issue as the complaint.
+  const callPrefilled = useRef(false)
+  useEffect(() => {
+    if (!callId || callPrefilled.current) return
+    callPrefilled.current = true
+    getCall(callId)
+      .then((c) => {
+        if (!c) return
+        setSourceCall(c)
+        setForm((f) => ({
+          ...f,
+          customerId: f.customerId || c.customerId || '',
+          complaint: f.complaint || c.issue || '',
+          notes: f.notes || (c.notes ? `From call: ${c.notes}` : ''),
+        }))
+      })
+      .catch(() => undefined)
+  }, [callId])
+
   // Hydrate the form when editing an existing service.
   useEffect(() => {
     if (!isEdit || !existing || hydrated) return
@@ -182,6 +207,7 @@ export default function ServiceFormPage() {
         quantity: p.quantity,
         unitPrice: p.unitPrice,
         costPrice: p.costPrice,
+        photoDataUrl: p.photoDataUrl,
       })),
     )
   }, [isEdit, existingParts])
@@ -271,6 +297,15 @@ export default function ServiceFormPage() {
       } else {
         const created = await createService(payload, parts)
         toast.success('Service saved', `${created.code} created successfully.`)
+        // The service was started from a booked call — close the loop by
+        // marking that call completed.
+        if (callId) {
+          try {
+            await updateCall(callId, { status: 'Completed' })
+          } catch {
+            // Never block saving the service on the call-status update.
+          }
+        }
         navigate(`/services/${created.id}?created=1`)
       }
     } catch (err) {
@@ -296,6 +331,22 @@ export default function ServiceFormPage() {
             : 'Record a service in under two minutes — only a few fields are required.'
         }
       />
+
+      {!isEdit && sourceCall && (
+        <div className="card mb-4 flex items-start gap-3 border-brand-200 bg-brand-50/60 p-3.5">
+          <PhoneCall size={18} className="mt-0.5 shrink-0 text-brand-600" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[13.5px] font-semibold text-ink-900">
+              Booking service from call: {sourceCall.name}
+            </p>
+            <p className="mt-0.5 text-[12.5px] text-ink-600">
+              {formatDate(sourceCall.date)}
+              {sourceCall.issue ? ` · ${sourceCall.issue}` : ''} — saving this service marks the
+              call as Completed.
+            </p>
+          </div>
+        </div>
+      )}
 
       <form
         onSubmit={(e) => {

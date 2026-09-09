@@ -434,6 +434,8 @@ alter table public.customers         add column if not exists amc_expiry      da
 alter table public.services          add column if not exists service_mode    text default 'Offline';
 alter table public.service_parts     add column if not exists position        integer;
 alter table public.service_parts     add column if not exists cost_price      numeric(12,2);
+-- Photo of the physical part (serial plate / label) as a compressed JPEG data URL.
+alter table public.service_parts     add column if not exists photo_data_url  text;
 alter table public.business_settings add column if not exists alt_phone       text;
 
 -- ---------------------------------------------------------------------
