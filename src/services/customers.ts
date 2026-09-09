@@ -65,6 +65,8 @@ export async function deleteCustomer(id: string) {
       db.reminders,
       db.calls,
       db.quotations,
+      db.serviceVisits,
+      db.expenses,
     ],
     async () => {
       await db.customerContacts.where('customerId').equals(id).delete()
@@ -79,6 +81,8 @@ export async function deleteCustomer(id: string) {
       await db.reminders.where('customerId').equals(id).delete()
       await db.calls.where('customerId').equals(id).delete()
       await db.quotations.where('customerId').equals(id).delete()
+      await db.serviceVisits.where('customerId').equals(id).delete()
+      await db.expenses.where('customerId').equals(id).delete()
       await db.customers.delete(id)
     },
   )

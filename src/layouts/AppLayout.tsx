@@ -13,6 +13,7 @@ import {
   ScrollText,
   Settings as SettingsIcon,
   Users,
+  Wallet,
   Wrench,
   X,
 } from 'lucide-react'
@@ -32,6 +33,7 @@ const NAV = [
   { to: '/quotations', label: 'Quotations', icon: ScrollText },
   { to: '/reminders', label: 'Reminders', icon: Bell },
   { to: '/payments', label: 'Payments', icon: CreditCard },
+  { to: '/expenses', label: 'Expenses', icon: Wallet },
   { to: '/settings', label: 'Settings', icon: SettingsIcon },
 ]
 

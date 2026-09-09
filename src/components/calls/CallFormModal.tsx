@@ -65,6 +65,7 @@ export function CallFormModal({ open, onClose, onSaved, call, defaultCustomerId 
     issue: '',
     priority: '' as '' | CallPriority,
     appointmentDate: '',
+    distanceKm: '',
     notes: '',
   })
   const [prefillCustomer, setPrefillCustomer] = useState('')
@@ -84,6 +85,7 @@ export function CallFormModal({ open, onClose, onSaved, call, defaultCustomerId 
         issue: call.issue ?? '',
         priority: call.priority ?? '',
         appointmentDate: call.appointmentDate ?? '',
+        distanceKm: call.distanceKm ? String(call.distanceKm) : '',
         notes: call.notes ?? '',
       })
     } else {
@@ -98,6 +100,7 @@ export function CallFormModal({ open, onClose, onSaved, call, defaultCustomerId 
         issue: '',
         priority: '',
         appointmentDate: '',
+        distanceKm: '',
         notes: '',
       })
     }
@@ -117,6 +120,8 @@ export function CallFormModal({ open, onClose, onSaved, call, defaultCustomerId 
       ...f,
       name: f.name.trim() ? f.name : linkedCustomer.name,
       phone: f.phone.trim() ? f.phone : linkedCustomer.phone,
+      // Default the distance from the customer's saved location.
+      distanceKm: f.distanceKm || (linkedCustomer.distanceKm ? String(linkedCustomer.distanceKm) : ''),
     }))
   }, [linkedCustomer, form.customerId, prefillCustomer, call])
 
@@ -147,6 +152,7 @@ export function CallFormModal({ open, onClose, onSaved, call, defaultCustomerId 
         issue: form.issue.trim(),
         priority: form.priority || undefined,
         appointmentDate: form.appointmentDate || undefined,
+        distanceKm: form.distanceKm,
         notes: form.notes.trim(),
       }
       const saved = call ? await updateCall(call.id, payload) : await createCall(payload)
@@ -329,7 +335,14 @@ export function CallFormModal({ open, onClose, onSaved, call, defaultCustomerId 
           value={form.appointmentDate}
           onChange={(e) => set('appointmentDate', e.target.value)}
           hint="Creates a follow-up reminder on the dashboard"
-          className="sm:col-span-2"
+        />
+        <TextField
+          label="Distance (km)"
+          inputMode="decimal"
+          value={form.distanceKm}
+          onChange={(e) => set('distanceKm', e.target.value)}
+          placeholder="e.g. 12.5"
+          hint={linkedCustomer?.distanceKm ? `Saved: ${linkedCustomer.distanceKm} km` : undefined}
         />
 
         <TextAreaField

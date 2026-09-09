@@ -1,10 +1,12 @@
 import { db, nextCode, nowISO, uid } from '@/lib/db'
-import type { Payment, Service, ServicePart, PaymentStatus } from '@/types'
+import type { Payment, Service, ServicePart, ServiceVisit, PaymentStatus } from '@/types'
 import { todayISO, warrantyExpiryFrom } from '@/utils/format'
 
 export interface Money {
   serviceCharge: number
   partsCost: number
+  /** Charge for delivering / transporting equipment to the customer's site. */
+  deliveryCharge?: number
   discount: number
   taxPercent: number
   amountPaid: number
@@ -18,9 +20,9 @@ export interface Totals {
   paymentStatus: PaymentStatus
 }
 
-/** Total = (service charge + parts cost - discount) + tax. Balance = total - paid. */
+/** Total = (service charge + parts + delivery - discount) + tax. Balance = total - paid. */
 export function computeTotals(m: Money): Totals {
-  const gross = round2((m.serviceCharge || 0) + (m.partsCost || 0))
+  const gross = round2((m.serviceCharge || 0) + (m.partsCost || 0) + (m.deliveryCharge || 0))
   const subtotal = round2(Math.max(0, gross - (m.discount || 0)))
   const taxAmount = round2((subtotal * (m.taxPercent || 0)) / 100)
   const totalAmount = round2(subtotal + taxAmount)
@@ -135,12 +137,54 @@ export async function updateService(
 }
 
 export async function deleteService(id: string) {
-  await db.transaction('rw', db.services, db.serviceParts, db.payments, db.reminders, async () => {
-    await db.serviceParts.where('serviceId').equals(id).delete()
-    await db.payments.where('serviceId').equals(id).delete()
-    await db.reminders.where('serviceId').equals(id).delete()
-    await db.services.delete(id)
-  })
+  await db.transaction(
+    'rw',
+    [db.services, db.serviceParts, db.payments, db.reminders, db.serviceVisits, db.expenses],
+    async () => {
+      await db.serviceParts.where('serviceId').equals(id).delete()
+      await db.payments.where('serviceId').equals(id).delete()
+      await db.reminders.where('serviceId').equals(id).delete()
+      await db.serviceVisits.where('serviceId').equals(id).delete()
+      await db.expenses.where('serviceId').equals(id).delete()
+      await db.services.delete(id)
+    },
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Visit log — one row per physical trip to the customer's location     */
+/* ------------------------------------------------------------------ */
+
+export interface VisitDraft {
+  date: string
+  distanceKm?: number
+  notes?: string
+}
+
+/** Adds a visit entry to a service's trip log. */
+export async function addServiceVisit(
+  serviceId: string,
+  draft: VisitDraft,
+): Promise<ServiceVisit> {
+  const service = await db.services.get(serviceId)
+  if (!service) throw new Error('Service not found. It may have been deleted.')
+  if (!draft.date) throw new Error('Visit date is required.')
+  const visit: ServiceVisit = {
+    id: uid(),
+    serviceId,
+    customerId: service.customerId,
+    date: draft.date,
+    distanceKm: draft.distanceKm !== undefined && Number(draft.distanceKm) > 0 ? Number(draft.distanceKm) : undefined,
+    notes: draft.notes?.trim() || undefined,
+    createdAt: nowISO(),
+    updatedAt: nowISO(),
+  }
+  await db.serviceVisits.add(visit)
+  return visit
+}
+
+export async function deleteServiceVisit(id: string) {
+  await db.serviceVisits.delete(id)
 }
 
 async function savePartsFor(serviceId: string, parts: PartDraft[], isDemo: boolean) {

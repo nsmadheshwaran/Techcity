@@ -5,8 +5,10 @@ import {
   CreditCard,
   FileText,
   Lock,
+  MapPin,
   Pencil,
   Phone,
+  Plus,
   Receipt,
   Trash2,
   User,
@@ -25,11 +27,19 @@ import {
   usePayments,
   useService,
   useServiceParts,
+  useServiceVisits,
   useSettings,
 } from '@/hooks/useData'
-import { deletePayment, deleteService, round2, setServiceStatus } from '@/services/services'
+import {
+  addServiceVisit,
+  deletePayment,
+  deleteService,
+  deleteServiceVisit,
+  round2,
+  setServiceStatus,
+} from '@/services/services'
 import { SERVICE_STATUSES, type DocKind, type ServiceStatus } from '@/types'
-import { formatDate, formatDateLong, formatMoney } from '@/utils/format'
+import { formatDate, formatDateLong, formatMoney, todayISO } from '@/utils/format'
 
 export default function ServiceDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -41,11 +51,16 @@ export default function ServiceDetailPage() {
   const customer = useCustomer(service?.customerId)
   const parts = useServiceParts(id)
   const payments = usePayments({ serviceId: id })
+  const visits = useServiceVisits(id)
   const settings = useSettings()
   const [payOpen, setPayOpen] = useState(false)
   const [docKind, setDocKind] = useState<DocKind>('report')
   const [showSuccess, setShowSuccess] = useState(false)
   const [photoZoom, setPhotoZoom] = useState<string | null>(null)
+  const [visitOpen, setVisitOpen] = useState(false)
+  const [visitDate, setVisitDate] = useState(todayISO())
+  const [visitKm, setVisitKm] = useState('')
+  const [visitNotes, setVisitNotes] = useState('')
 
   useEffect(() => {
     if (searchParams.get('created') === '1') {
@@ -128,6 +143,40 @@ export default function ServiceDetailPage() {
     }
   }
 
+  async function onAddVisit() {
+    if (!service) return
+    try {
+      await addServiceVisit(service.id, {
+        date: visitDate,
+        distanceKm: visitKm.trim() ? Number(visitKm) : customer?.distanceKm,
+        notes: visitNotes,
+      })
+      toast.success('Visit added', `${formatDate(visitDate)} logged for ${service.code}.`)
+      setVisitOpen(false)
+      setVisitKm('')
+      setVisitNotes('')
+      setVisitDate(todayISO())
+    } catch (err) {
+      toast.error('Could not add visit', err instanceof Error ? err.message : 'Try again.')
+    }
+  }
+
+  async function onDeleteVisit(visitId: string) {
+    const ok = await confirm({
+      title: 'Remove this visit entry?',
+      message: 'The visit will be removed from the trip log.',
+      confirmLabel: 'Remove',
+      danger: true,
+    })
+    if (!ok) return
+    try {
+      await deleteServiceVisit(visitId)
+      toast.success('Visit removed')
+    } catch (err) {
+      toast.error('Could not remove visit', err instanceof Error ? err.message : 'Try again.')
+    }
+  }
+
   async function onDeletePayment(paymentId: string, amount: number) {
     const ok = await confirm({
       title: 'Delete this payment?',
@@ -149,7 +198,9 @@ export default function ServiceDetailPage() {
       <PageHeader
         back="/services"
         title={service.serviceType}
-        subtitle={`${service.code} · ${formatDateLong(service.serviceDate)}`}
+        subtitle={`${service.code} · ${formatDateLong(service.serviceDate)}${
+          service.finishedDate ? ` → finished ${formatDate(service.finishedDate)}` : ''
+        }`}
         actions={
           <>
             <button className="btn-secondary" onClick={() => navigate(`/services/${service.id}/edit`)}>
@@ -206,6 +257,12 @@ export default function ServiceDetailPage() {
                 <span className="text-[12.5px] text-ink-500">Technician: {service.technician}</span>
               )}
             </div>
+
+            {service.finishedDate && (
+              <p className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[12.5px] font-medium text-emerald-700">
+                <CheckCircle2 size={13} /> Finished on {formatDateLong(service.finishedDate)}
+              </p>
+            )}
 
             <div className="mt-3">
               <label className="field-label">Update status</label>
@@ -388,6 +445,95 @@ export default function ServiceDetailPage() {
             )}
           </section>
 
+          {/* Visit log — every physical trip to the customer's location */}
+          <section className="card">
+            <div className="flex items-center justify-between border-b border-ink-200 px-4 py-3">
+              <h2 className="text-[15px] font-semibold text-ink-900">
+                Visit Log ({visits?.length ?? 0})
+              </h2>
+              <button
+                className="btn-secondary py-1.5 text-[12.5px]"
+                onClick={() => setVisitOpen((o) => !o)}
+              >
+                <Plus size={14} /> Add Visit
+              </button>
+            </div>
+
+            {visitOpen && (
+              <div className="space-y-2 border-b border-ink-100 bg-ink-50/60 px-4 py-3">
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <label className="block">
+                    <span className="field-label">Visit date</span>
+                    <input
+                      type="date"
+                      className="input"
+                      value={visitDate}
+                      onChange={(e) => setVisitDate(e.target.value)}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="field-label">Distance (km)</span>
+                    <input
+                      className="input"
+                      inputMode="decimal"
+                      placeholder={customer?.distanceKm ? String(customer.distanceKm) : 'optional'}
+                      value={visitKm}
+                      onChange={(e) => setVisitKm(e.target.value)}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="field-label">Notes</span>
+                    <input
+                      className="input"
+                      placeholder="Installed camera, collected payment…"
+                      value={visitNotes}
+                      onChange={(e) => setVisitNotes(e.target.value)}
+                    />
+                  </label>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button className="btn-ghost px-3 py-1.5 text-[12.5px]" onClick={() => setVisitOpen(false)}>
+                    Cancel
+                  </button>
+                  <button className="btn-primary py-1.5 text-[12.5px]" onClick={onAddVisit}>
+                    Save Visit
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!visits?.length ? (
+              <p className="px-4 py-5 text-center text-[13px] text-ink-500">
+                No visits logged yet. Every trip to the customer's location can be recorded here.
+              </p>
+            ) : (
+              <ul className="divide-y divide-ink-100">
+                {visits.map((v) => (
+                  <li key={v.id} className="flex items-center gap-3 px-4 py-2.5">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+                      <MapPin size={14} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-medium text-ink-900">{formatDateLong(v.date)}</p>
+                      <p className="text-[12px] text-ink-500">
+                        {[v.distanceKm ? `${v.distanceKm} km travelled` : null, v.notes]
+                          .filter(Boolean)
+                          .join(' · ') || '—'}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => onDeleteVisit(v.id)}
+                      className="btn-ghost shrink-0 px-2 text-red-600 hover:bg-red-50"
+                      aria-label="Remove visit"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
           {/* Payments */}
           <section className="card">
             <div className="flex items-center justify-between border-b border-ink-200 px-4 py-3">
@@ -440,6 +586,12 @@ export default function ServiceDetailPage() {
             <dl className="space-y-2 text-[13.5px]">
               <Row label="Service Charge" value={formatMoney(service.serviceCharge, settings.currency)} />
               <Row label="Parts Cost" value={formatMoney(service.partsCost, settings.currency)} />
+              {(service.deliveryCharge ?? 0) > 0 && (
+                <Row
+                  label="Delivery / Travel"
+                  value={formatMoney(service.deliveryCharge ?? 0, settings.currency)}
+                />
+              )}
               {service.discount > 0 && (
                 <Row
                   label="Discount"

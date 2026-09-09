@@ -60,6 +60,7 @@ const DEVICE_OPTIONS = [
 interface FormState {
   customerId: string
   serviceDate: string
+  finishedDate: string
   serviceType: string
   status: ServiceStatus
   serviceMode: ServiceMode
@@ -73,6 +74,7 @@ interface FormState {
   technician: string
   serviceCharge: number
   partsCost: number
+  deliveryCharge: number
   discount: number
   taxPercent: number
   amountPaid: number
@@ -101,6 +103,7 @@ export default function ServiceFormPage() {
   const [form, setForm] = useState<FormState>(() => ({
     customerId: searchParams.get('customerId') ?? '',
     serviceDate: todayISO(),
+    finishedDate: '',
     serviceType: '',
     status: 'Received',
     serviceMode: 'Offline',
@@ -114,6 +117,7 @@ export default function ServiceFormPage() {
     technician: '',
     serviceCharge: 0,
     partsCost: 0,
+    deliveryCharge: 0,
     discount: 0,
     taxPercent: 0,
     amountPaid: 0,
@@ -170,6 +174,7 @@ export default function ServiceFormPage() {
     setForm({
       customerId: existing.customerId,
       serviceDate: existing.serviceDate,
+      finishedDate: existing.finishedDate ?? '',
       serviceType: existing.serviceType,
       status: existing.status,
       serviceMode: existing.serviceMode ?? 'Offline',
@@ -183,6 +188,7 @@ export default function ServiceFormPage() {
       technician: existing.technician ?? '',
       serviceCharge: existing.serviceCharge,
       partsCost: existing.partsCost,
+      deliveryCharge: existing.deliveryCharge ?? 0,
       discount: existing.discount,
       taxPercent: existing.taxPercent ?? 0,
       amountPaid: existing.amountPaid,
@@ -227,6 +233,7 @@ export default function ServiceFormPage() {
       computeTotals({
         serviceCharge: form.serviceCharge,
         partsCost: form.partsCost,
+        deliveryCharge: form.deliveryCharge,
         discount: form.discount,
         taxPercent: settings.gstEnabled ? form.taxPercent : 0,
         amountPaid: form.amountPaid,
@@ -267,6 +274,7 @@ export default function ServiceFormPage() {
       const payload = {
         customerId: form.customerId,
         serviceDate: form.serviceDate,
+        finishedDate: form.finishedDate || undefined,
         serviceType: form.serviceType.trim(),
         status,
         serviceMode: form.serviceMode,
@@ -280,6 +288,7 @@ export default function ServiceFormPage() {
         technician: form.technician.trim() || undefined,
         serviceCharge: form.serviceCharge,
         partsCost: form.partsCost,
+        deliveryCharge: form.deliveryCharge,
         discount: form.discount,
         taxPercent: settings.gstEnabled ? form.taxPercent : 0,
         amountPaid: form.amountPaid,
@@ -381,6 +390,13 @@ export default function ServiceFormPage() {
                 value={form.serviceDate}
                 onChange={(e) => set('serviceDate', e.target.value)}
                 error={errors.serviceDate}
+              />
+              <TextField
+                label="Finished Date"
+                type="date"
+                value={form.finishedDate}
+                onChange={(e) => set('finishedDate', e.target.value)}
+                hint="Leave empty while work is ongoing"
               />
               <ComboField
                 label="Service Type"
@@ -540,6 +556,14 @@ export default function ServiceFormPage() {
                 hint={parts.length ? 'Auto-filled from the parts list' : undefined}
               />
               <NumberField
+                label="Delivery / Travel Charge"
+                value={form.deliveryCharge}
+                onValueChange={(v) => set('deliveryCharge', v)}
+                error={errors.deliveryCharge}
+                currency={settings.currency}
+                hint="Added to the customer total"
+              />
+              <NumberField
                 label="Discount"
                 value={form.discount}
                 onValueChange={(v) => set('discount', v)}
@@ -561,6 +585,12 @@ export default function ServiceFormPage() {
                   <span>Subtotal</span>
                   <span>{formatMoney(totals.subtotal, settings.currency)}</span>
                 </div>
+                {form.deliveryCharge > 0 && (
+                  <div className="mt-1 flex items-center justify-between text-[13px] text-ink-600">
+                    <span>Incl. delivery / travel</span>
+                    <span>{formatMoney(form.deliveryCharge, settings.currency)}</span>
+                  </div>
+                )}
                 {settings.gstEnabled && form.taxPercent > 0 && (
                   <div className="mt-1 flex items-center justify-between text-[13px] text-ink-600">
                     <span>Tax ({form.taxPercent}%)</span>

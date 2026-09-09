@@ -23,6 +23,7 @@ import QuotationsPage from '@/pages/QuotationsPage'
 import QuotationFormPage from '@/pages/QuotationFormPage'
 import RemindersPage from '@/pages/RemindersPage'
 import PaymentsPage from '@/pages/PaymentsPage'
+import ExpensesPage from '@/pages/ExpensesPage'
 import SettingsPage from '@/pages/SettingsPage'
 import NotFoundPage from '@/pages/NotFoundPage'
 
@@ -50,6 +51,7 @@ const router = createHashRouter([
       { path: 'quotations/:id/edit', element: <QuotationFormPage key="quotation-edit" /> },
       { path: 'reminders', element: <RemindersPage /> },
       { path: 'payments', element: <PaymentsPage /> },
+      { path: 'expenses', element: <ExpensesPage /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],

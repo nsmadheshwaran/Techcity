@@ -35,6 +35,7 @@ const BLANK = {
   address: '',
   city: '',
   pincode: '',
+  distanceKm: '',
   gstNumber: '',
   password: '',
   complaintDate: '',
@@ -65,6 +66,7 @@ export function CustomerFormModal({ open, onClose, onSaved, customer, initial }:
         address: customer.address ?? '',
         city: customer.city ?? '',
         pincode: customer.pincode ?? '',
+        distanceKm: customer.distanceKm ? String(customer.distanceKm) : '',
         gstNumber: customer.gstNumber ?? '',
         password: customer.password ?? '',
         complaintDate: customer.complaintDate ?? '',
@@ -122,6 +124,8 @@ export function CustomerFormModal({ open, onClose, onSaved, customer, initial }:
         address: form.address.trim() || undefined,
         city: form.city.trim() || undefined,
         pincode: form.pincode.trim() || undefined,
+        distanceKm:
+          form.distanceKm.trim() && Number(form.distanceKm) > 0 ? Number(form.distanceKm) : undefined,
         gstNumber: form.gstNumber.trim() || undefined,
         password: form.password.trim() || undefined,
         complaintDate: form.complaintDate || undefined,
@@ -310,6 +314,14 @@ export function CustomerFormModal({ open, onClose, onSaved, customer, initial }:
           onChange={(e) => set('pincode')(e.target.value)}
           error={errors.pincode}
           placeholder="641001"
+        />
+        <TextField
+          label="Distance from Shop (km)"
+          inputMode="decimal"
+          value={form.distanceKm}
+          onChange={(e) => set('distanceKm')(e.target.value)}
+          placeholder="e.g. 12.5"
+          hint="Used for travel planning and visit logs"
         />
         <div className="sm:col-span-2">
           <p className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-ink-400">

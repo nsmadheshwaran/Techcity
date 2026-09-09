@@ -39,6 +39,8 @@ export interface Customer extends BaseRow {
   dateAdded: string // yyyy-mm-dd
   /** Date the latest complaint was attended (yyyy-mm-dd). */
   complaintDate?: string
+  /** Approximate distance from the shop to the customer's location, in km. */
+  distanceKm?: number
   /** AMC (Annual Maintenance Contract) type, e.g. "CCTV AMC" / "Desktop AMC". */
   amcType?: string
   /** AMC duration in years. */
@@ -86,6 +88,37 @@ export type PaymentStatus = (typeof PAYMENT_STATUSES)[number]
 export const PAYMENT_METHODS = ['Cash', 'UPI', 'Bank Transfer', 'Card', 'Other'] as const
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number]
 
+/** What kind of money movement an expense row records. */
+export const EXPENSE_CATEGORIES = [
+  'Fuel / Travel',
+  'Food',
+  'Parts Purchase',
+  'Tools',
+  'Rent',
+  'Electricity',
+  'Phone / Internet',
+  'Marketing',
+  'Other',
+] as const
+export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number]
+
+/**
+ * Shop-level spending (fuel, food, parts purchase…) or extra earning
+ * (side job, scrap sale). `type: 'expense'` rows count as spending,
+ * `'income'` rows as earnings — powering the Expenses page totals.
+ */
+export interface Expense extends BaseRow {
+  date: string // yyyy-mm-dd
+  type: 'expense' | 'income'
+  category: ExpenseCategory | string
+  title: string
+  amount: number
+  /** Optional link to the service this cost was for. */
+  serviceId?: ID
+  customerId?: ID
+  notes?: string
+}
+
 /** Whether the service was performed on-site or remotely. */
 export const SERVICE_MODES = ['Offline', 'Online'] as const
 export type ServiceMode = (typeof SERVICE_MODES)[number]
@@ -114,6 +147,8 @@ export interface Service extends BaseRow {
   // money
   serviceCharge: number
   partsCost: number
+  /** Charge for transporting / delivering equipment to the customer's site. */
+  deliveryCharge?: number
   discount: number
   taxPercent: number
   totalAmount: number
@@ -127,6 +162,23 @@ export interface Service extends BaseRow {
   warrantyExpiry?: string // yyyy-mm-dd
   nextServiceDate?: string // yyyy-mm-dd
 
+  /** When the work was actually finished (yyyy-mm-dd) — may differ from serviceDate. */
+  finishedDate?: string
+
+  notes?: string
+}
+
+/**
+ * One physical visit to a customer's location against a service. A job can
+ * span multiple trips (survey, install, follow-up); each visit records when
+ * you went, how far it was and optional notes.
+ */
+export interface ServiceVisit extends BaseRow {
+  serviceId: ID
+  customerId: ID
+  date: string // yyyy-mm-dd
+  /** km travelled for this visit (defaults from the customer when left empty). */
+  distanceKm?: number
   notes?: string
 }
 
@@ -271,6 +323,8 @@ export interface Call extends BaseRow {
   priority?: CallPriority
   /** Promised visit / follow-up date (yyyy-mm-dd) → creates a reminder. */
   appointmentDate?: string
+  /** Approximate distance to the customer's location for this call, in km. */
+  distanceKm?: number
   notes?: string
 }
 
@@ -324,6 +378,11 @@ export interface CustomerWithStats extends Customer {
 
 export interface ServiceWithCustomer extends Service {
   customer?: Customer
+}
+
+/** Service joined with its visit log for detail views. */
+export interface ServiceWithMeta extends Service {
+  visits?: ServiceVisit[]
 }
 
 export interface QuotationWithCustomer extends Quotation {

@@ -7,6 +7,7 @@ import {
   Pencil,
   Phone,
   Plus,
+  Route as RouteMap,
   Rows3,
   Search,
   Trash2,
@@ -386,6 +387,11 @@ export default function CallsPage() {
                         ) : (
                           <span className="text-ink-300">—</span>
                         )}
+                        {c.distanceKm ? (
+                          <span className="mt-0.5 flex items-center gap-0.5 text-[11px] text-ink-500">
+                            <RouteMap size={10} /> {c.distanceKm} km
+                          </span>
+                        ) : null}
                       </td>
                       <td className="table-td max-w-[220px]">
                         <p className="truncate text-[13px] text-ink-700" title={c.issue}>
@@ -636,6 +642,11 @@ function CallView({
                       {c.priority && (
                         <span className={`badge ${PRIORITY_STYLES[c.priority]}`}>{c.priority}</span>
                       )}
+                      {c.distanceKm ? (
+                        <span className="badge border-ink-200 bg-ink-100 text-ink-600">
+                          <RouteMap size={11} className="mr-0.5 inline" /> {c.distanceKm} km
+                        </span>
+                      ) : null}
                       <span className="text-[12.5px] text-ink-500">{formatDate(c.date)}</span>
                       {c.appointmentDate && (
                         <span className="inline-flex items-center gap-1 text-[12px] font-medium text-brand-700">

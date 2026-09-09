@@ -1,5 +1,5 @@
 import { db, getSettings, sortParts } from '@/lib/db'
-import type { CustomerContact } from '@/types'
+import type { CustomerContact, Expense, ServiceVisit } from '@/types'
 import type { Call, Customer, Equipment, Payment, Quotation, Reminder, Service, ServicePart } from '@/types'
 import { downloadCSV, downloadJSON, timestampSuffix } from '@/utils/csv'
 
@@ -13,6 +13,8 @@ export interface BackupFile {
     serviceParts: ServicePart[]
     payments: Payment[]
     equipment: Equipment[]
+    serviceVisits: ServiceVisit[]
+    expenses: Expense[]
     reminders: Reminder[]
     customerContacts: CustomerContact[]
     calls: Call[]
@@ -29,6 +31,8 @@ export async function buildBackup(): Promise<BackupFile> {
     serviceParts,
     payments,
     equipment,
+    serviceVisits,
+    expenses,
     reminders,
     customerContacts,
     calls,
@@ -41,6 +45,8 @@ export async function buildBackup(): Promise<BackupFile> {
     db.serviceParts.toArray(),
     db.payments.toArray(),
     db.equipment.toArray(),
+    db.serviceVisits.toArray(),
+    db.expenses.toArray(),
     db.reminders.toArray(),
     db.customerContacts.toArray(),
     db.calls.toArray(),
@@ -58,6 +64,8 @@ export async function buildBackup(): Promise<BackupFile> {
       serviceParts,
       payments,
       equipment,
+      serviceVisits,
+      expenses,
       reminders,
       customerContacts,
       calls,
@@ -94,6 +102,8 @@ export async function restoreBackup(raw: string) {
       db.serviceParts,
       db.payments,
       db.equipment,
+      db.serviceVisits,
+      db.expenses,
       db.reminders,
       db.customerContacts,
       db.calls,
@@ -109,6 +119,8 @@ export async function restoreBackup(raw: string) {
         db.serviceParts.clear(),
         db.payments.clear(),
         db.equipment.clear(),
+        db.serviceVisits.clear(),
+        db.expenses.clear(),
         db.reminders.clear(),
         db.customerContacts.clear(),
         db.calls.clear(),
@@ -121,6 +133,8 @@ export async function restoreBackup(raw: string) {
       if (d.serviceParts?.length) await db.serviceParts.bulkAdd(d.serviceParts)
       if (d.payments?.length) await db.payments.bulkAdd(d.payments)
       if (d.equipment?.length) await db.equipment.bulkAdd(d.equipment)
+      if (d.serviceVisits?.length) await db.serviceVisits.bulkAdd(d.serviceVisits)
+      if (d.expenses?.length) await db.expenses.bulkAdd(d.expenses)
       if (d.reminders?.length) await db.reminders.bulkAdd(d.reminders)
       if (d.customerContacts?.length) await db.customerContacts.bulkAdd(d.customerContacts)
       if (d.calls?.length) await db.calls.bulkAdd(d.calls)

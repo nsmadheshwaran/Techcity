@@ -8,6 +8,7 @@ import type {
   Quotation,
   Service,
   ServicePart,
+  ServiceVisit,
 } from '@/types'
 import { computeStats } from '@/services/customers'
 
@@ -110,6 +111,25 @@ export function useCalls(customerId?: string) {
     const rows = customerId
       ? await db.calls.where('customerId').equals(customerId).toArray()
       : await db.calls.toArray()
+    return rows.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
+  }, [customerId])
+}
+
+/** Visit log of one service, newest first. */
+export function useServiceVisits(serviceId?: string) {
+  return useLiveQuery(async () => {
+    if (!serviceId) return [] as ServiceVisit[]
+    const rows = await db.serviceVisits.where('serviceId').equals(serviceId).toArray()
+    return rows.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
+  }, [serviceId])
+}
+
+/** All expenses (spending + income), newest first. Pass a customerId to filter. */
+export function useExpenses(customerId?: string) {
+  return useLiveQuery(async () => {
+    const rows = customerId
+      ? await db.expenses.where('customerId').equals(customerId).toArray()
+      : await db.expenses.toArray()
     return rows.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
   }, [customerId])
 }

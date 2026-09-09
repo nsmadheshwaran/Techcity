@@ -6,11 +6,13 @@ import type {
   Customer,
   CustomerContact,
   Equipment,
+  Expense,
   Payment,
   Quotation,
   Reminder,
   Service,
   ServicePart,
+  ServiceVisit,
 } from '@/types'
 
 /**
@@ -35,6 +37,8 @@ export class TechCityDB extends Dexie {
   serviceParts!: Table<ServicePart, string>
   payments!: Table<Payment, string>
   equipment!: Table<Equipment, string>
+  serviceVisits!: Table<ServiceVisit, string>
+  expenses!: Table<Expense, string>
   reminders!: Table<Reminder, string>
   calls!: Table<Call, string>
   quotations!: Table<Quotation, string>
@@ -89,6 +93,15 @@ export class TechCityDB extends Dexie {
     // can delete it from the cloud too. Local-only apps never touch it.
     this.version(5).stores({
       outbox: '++id, table, rowId, at',
+    })
+
+    // v6 — service visit log (multiple trips per service) and the expenses
+    // tracker (spending vs earning). Services also gained `deliveryCharge`
+    // and `finishedDate` columns and customers/calls a `distanceKm` column;
+    // those are additive row fields needing no index (undefined = not set).
+    this.version(6).stores({
+      serviceVisits: 'id, serviceId, customerId, date, createdAt',
+      expenses: 'id, date, type, category, serviceId, customerId, createdAt',
     })
   }
 }

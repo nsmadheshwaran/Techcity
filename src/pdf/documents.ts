@@ -879,6 +879,15 @@ function buildModernDocument(input: DocInput): jsPDF {
       formatAmount(service.serviceCharge),
     ])
   }
+  if ((service.deliveryCharge ?? 0) > 0) {
+    body.push([
+      String(body.length + 1),
+      'Delivery / travel charge',
+      '1',
+      formatAmount(service.deliveryCharge ?? 0),
+      formatAmount(service.deliveryCharge ?? 0),
+    ])
+  }
   if (!body.length) {
     body.push([String(1), `${clean(service.serviceType)} (no charge)`, '1', '0.00', '0.00'])
   }
@@ -919,7 +928,7 @@ function buildModernDocument(input: DocInput): jsPDF {
 
   /* Financial summary */
   y = pageBreakIfNeeded(doc, y, 55)
-  const gross = service.serviceCharge + service.partsCost
+  const gross = service.serviceCharge + service.partsCost + (service.deliveryCharge ?? 0)
   const subtotal = Math.max(0, gross - service.discount)
   const taxAmount = Math.round(subtotal * ((service.taxPercent || 0) / 100) * 100) / 100
 
@@ -927,6 +936,8 @@ function buildModernDocument(input: DocInput): jsPDF {
     ['Service Charge', money(service.serviceCharge)],
     ['Parts Cost', money(service.partsCost)],
   ]
+  if ((service.deliveryCharge ?? 0) > 0)
+    summary.push(['Delivery / Travel', money(service.deliveryCharge ?? 0)])
   if (service.discount > 0) summary.push(['Discount', `- ${money(service.discount)}`])
   if (settings.gstEnabled && (service.taxPercent || 0) > 0) {
     summary.push(['Subtotal', money(subtotal)])

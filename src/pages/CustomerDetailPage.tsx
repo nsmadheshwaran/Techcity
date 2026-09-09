@@ -14,6 +14,7 @@ import {
   Pencil,
   Phone,
   Plus,
+  Route,
   ScrollText,
   Trash2,
   Wrench,
@@ -330,6 +331,12 @@ export default function CustomerDetailPage() {
                   </dd>
                 </div>
               )}
+              {customer.distanceKm ? (
+                <div className="flex items-start gap-2.5">
+                  <Route size={15} className="mt-0.5 shrink-0 text-ink-400" />
+                  <dd className="text-ink-700">{customer.distanceKm} km from shop</dd>
+                </div>
+              ) : null}
               {customer.password && (
                 <div className="flex items-start gap-2.5">
                   <Lock size={15} className="mt-0.5 shrink-0 text-ink-400" />

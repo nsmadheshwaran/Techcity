@@ -23,6 +23,8 @@ export const SYNC_TABLES: { local: string; cloud: string }[] = [
   { local: 'customerContacts', cloud: 'customer_contacts' },
   { local: 'services', cloud: 'services' },
   { local: 'serviceParts', cloud: 'service_parts' },
+  { local: 'serviceVisits', cloud: 'service_visits' },
+  { local: 'expenses', cloud: 'expenses' },
   { local: 'payments', cloud: 'payments' },
   { local: 'equipment', cloud: 'equipment' },
   { local: 'reminders', cloud: 'reminders' },

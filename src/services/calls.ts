@@ -16,6 +16,8 @@ export interface CallInput {
   issue?: string
   priority?: CallPriority
   appointmentDate?: string
+  /** Approximate distance to the customer's location for this call, in km. */
+  distanceKm?: number | string
   notes?: string
 }
 
@@ -48,6 +50,13 @@ async function syncFollowUpReminder(call: Call) {
   })
 }
 
+/** Parses a km value from a form input; '' / invalid → undefined. */
+function toKm(value: number | string | undefined): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined
+  const n = Number(value)
+  return Number.isFinite(n) && n > 0 ? n : undefined
+}
+
 export async function createCall(input: CallInput): Promise<Call> {
   const name = (input.name ?? '').trim()
   if (!name) throw new Error('Customer name is required.')
@@ -63,6 +72,7 @@ export async function createCall(input: CallInput): Promise<Call> {
     issue: input.issue?.trim() || undefined,
     priority: input.priority || undefined,
     appointmentDate: input.appointmentDate || undefined,
+    distanceKm: toKm(input.distanceKm),
     notes: input.notes?.trim() || undefined,
     createdAt: nowISO(),
     updatedAt: nowISO(),
@@ -97,6 +107,8 @@ export async function updateCall(id: string, patch: CallInput): Promise<Call> {
       patch.appointmentDate === undefined
         ? existing.appointmentDate
         : patch.appointmentDate || undefined,
+    distanceKm:
+      patch.distanceKm === undefined ? existing.distanceKm : toKm(patch.distanceKm) || undefined,
     notes: patch.notes === undefined ? existing.notes : patch.notes?.trim() || undefined,
     updatedAt: nowISO(),
   }

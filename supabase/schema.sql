@@ -249,7 +249,7 @@ as $$
 declare
   subtotal numeric(12,2);
 begin
-  subtotal          := greatest(0, new.service_charge + new.parts_cost - new.discount);
+  subtotal          := greatest(0, new.service_charge + new.parts_cost + coalesce(new.delivery_charge, 0) - new.discount);
   new.total_amount  := round(subtotal + (subtotal * coalesce(new.tax_percent, 0) / 100), 2);
   new.balance       := round(new.total_amount - new.amount_paid, 2);
   new.payment_status := case
@@ -432,11 +432,79 @@ alter table public.customers         add column if not exists amc_start_date  da
 alter table public.customers         add column if not exists amc_expiry      date;
 
 alter table public.services          add column if not exists service_mode    text default 'Offline';
+alter table public.services          add column if not exists finished_date   date;
+alter table public.services          add column if not exists delivery_charge numeric(12,2) not null default 0;
 alter table public.service_parts     add column if not exists position        integer;
 alter table public.service_parts     add column if not exists cost_price      numeric(12,2);
 -- Photo of the physical part (serial plate / label) as a compressed JPEG data URL.
 alter table public.service_parts     add column if not exists photo_data_url  text;
+alter table public.customers         add column if not exists distance_km     numeric(7,2);
+alter table public.calls             add column if not exists distance_km     numeric(7,2);
 alter table public.business_settings add column if not exists alt_phone       text;
+
+-- ---------------------------------------------------------------------
+-- service_visits (log of every physical trip to a customer's location)
+-- ---------------------------------------------------------------------
+create table if not exists public.service_visits (
+  id          uuid primary key default gen_random_uuid(),
+  owner_id    uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  service_id  uuid not null references public.services (id) on delete cascade,
+  customer_id uuid not null references public.customers (id) on delete cascade,
+  date        date not null default current_date,
+  distance_km numeric(7,2),
+  notes       text,
+  is_demo     boolean not null default false,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+create index if not exists service_visits_service_idx  on public.service_visits (service_id);
+create index if not exists service_visits_customer_idx on public.service_visits (customer_id);
+
+-- ---------------------------------------------------------------------
+-- expenses (shop-level spending and extra earning tracker)
+-- ---------------------------------------------------------------------
+create table if not exists public.expenses (
+  id          uuid primary key default gen_random_uuid(),
+  owner_id    uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  date        date not null default current_date,
+  type        text not null default 'expense' check (type in ('expense','income')),
+  category    text not null default 'Other',
+  title       text not null,
+  amount      numeric(12,2) not null check (amount > 0),
+  service_id  uuid references public.services (id) on delete set null,
+  customer_id uuid references public.customers (id) on delete set null,
+  notes       text,
+  is_demo     boolean not null default false,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+create index if not exists expenses_owner_date_idx on public.expenses (owner_id, date desc);
+create index if not exists expenses_customer_idx   on public.expenses (customer_id);
+create index if not exists expenses_service_idx    on public.expenses (service_id);
+
+alter table public.service_visits enable row level security;
+alter table public.expenses       enable row level security;
+
+drop policy if exists "service_visits_owner_all" on public.service_visits;
+create policy "service_visits_owner_all" on public.service_visits
+  for all to authenticated
+  using      (owner_id = auth.uid())
+  with check (owner_id = auth.uid());
+
+drop policy if exists "expenses_owner_all" on public.expenses;
+create policy "expenses_owner_all" on public.expenses
+  for all to authenticated
+  using      (owner_id = auth.uid())
+  with check (owner_id = auth.uid());
+
+-- updated_at maintenance for the new tables
+drop trigger if exists service_visits_touch on public.service_visits;
+create trigger service_visits_touch before update on public.service_visits
+  for each row execute function public.touch_updated_at();
+
+drop trigger if exists expenses_touch on public.expenses;
+create trigger expenses_touch before update on public.expenses
+  for each row execute function public.touch_updated_at();
 
 -- ---------------------------------------------------------------------
 -- calls (call book)
