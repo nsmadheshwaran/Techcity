@@ -90,7 +90,7 @@ export async function createService(draft: ServiceDraft, parts: PartDraft[] = []
         date: service.serviceDate,
         amount: round2(draft.amountPaid),
         method: service.paymentMethod ?? 'Cash',
-        note: 'Initial payment recorded with service',
+        note: 'Initial payment on service booking',
         createdAt: nowISO(),
         updatedAt: nowISO(),
         isDemo: draft.isDemo,

@@ -15,6 +15,7 @@ import { LoadingState } from '@/components/ui/States'
 import { useToast } from '@/components/ui/Toast'
 import { useService, useServiceParts, useSettingsWithStatus, useTechnicians } from '@/hooks/useData'
 import { getCall, updateCall } from '@/services/calls'
+import { getQuotation, updateQuotationStatus } from '@/services/quotations'
 import {
   computeTotals,
   createService,
@@ -98,6 +99,7 @@ export default function ServiceFormPage() {
 
   /** Booked call this service was started from (services/new?callId=…). */
   const callId = searchParams.get('callId')
+  const quotationId = searchParams.get('quotationId')
   const [sourceCall, setSourceCall] = useState<Awaited<ReturnType<typeof getCall>>>(undefined)
 
   const [form, setForm] = useState<FormState>(() => ({
@@ -167,6 +169,37 @@ export default function ServiceFormPage() {
       })
       .catch(() => undefined)
   }, [callId])
+
+  // Prefill from a quotation (Quotations → “Convert to Service”).
+  const quotationPrefilled = useRef(false)
+  useEffect(() => {
+    if (!quotationId || quotationPrefilled.current || isEdit) return
+    quotationPrefilled.current = true
+    getQuotation(quotationId)
+      .then((q) => {
+        if (!q) return
+        setForm((f) => ({
+          ...f,
+          customerId: f.customerId || q.customerId || '',
+          complaint: f.complaint || `Work based on quotation ${q.code}: ${q.items.map((i) => i.name).join(', ')}`,
+          notes: f.notes || (q.notes ? `Quotation ${q.code}: ${q.notes}` : `Created from quotation ${q.code}`),
+          discount: q.discount || f.discount,
+          taxPercent: q.taxPercent || f.taxPercent,
+        }))
+        if (q.items && q.items.length > 0) {
+          setParts(
+            q.items.map((it) => ({
+              id: it.id,
+              name: it.name,
+              quantity: it.quantity,
+              unitPrice: it.unitPrice,
+            })),
+          )
+        }
+        toast.info('Quotation details loaded', `Pre-filled customer and items from ${q.code}`)
+      })
+      .catch(() => undefined)
+  }, [quotationId, isEdit, toast])
 
   // Hydrate the form when editing an existing service.
   useEffect(() => {
@@ -313,6 +346,13 @@ export default function ServiceFormPage() {
             await updateCall(callId, { status: 'Completed' })
           } catch {
             // Never block saving the service on the call-status update.
+          }
+        }
+        if (quotationId) {
+          try {
+            await updateQuotationStatus(quotationId, 'Accepted')
+          } catch {
+            // Never block saving the service on the quotation-status update.
           }
         }
         navigate(`/services/${created.id}?created=1`)

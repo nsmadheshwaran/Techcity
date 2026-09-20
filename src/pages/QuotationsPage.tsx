@@ -1,6 +1,20 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Download, Eye, FileText, Pencil, Plus, ScrollText, Trash2 } from 'lucide-react'
+import {
+  Briefcase,
+  CheckCircle2,
+  Clock,
+  Download,
+  Eye,
+  FileText,
+  MessageCircle,
+  Pencil,
+  Plus,
+  ScrollText,
+  Search,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState } from '@/components/ui/States'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
@@ -8,13 +22,13 @@ import { useToast } from '@/components/ui/Toast'
 import { useQuotationsWithCustomer, useSettings } from '@/hooks/useData'
 import { deleteQuotation } from '@/services/quotations'
 import { QUOTATION_STATUSES, type QuotationStatus, type QuotationWithCustomer } from '@/types'
-import { formatDate, formatMoney } from '@/utils/format'
+import { formatDate, formatMoney, toWhatsAppNumber } from '@/utils/format'
 
-const STATUS_STYLES: Record<QuotationStatus, string> = {
-  Draft: 'border-ink-200 bg-ink-100 text-ink-600',
-  Sent: 'border-brand-100 bg-brand-50 text-brand-700',
-  Accepted: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-  Expired: 'border-red-200 bg-red-50 text-red-600',
+const STATUS_CONFIG: Record<QuotationStatus, { pill: string; dot: string }> = {
+  Draft: { pill: 'border-ink-200/80 bg-ink-100/70 text-ink-700', dot: 'bg-ink-400' },
+  Sent: { pill: 'border-blue-200/80 bg-blue-50 text-blue-700', dot: 'bg-blue-500 animate-pulse' },
+  Accepted: { pill: 'border-emerald-200/80 bg-emerald-50 text-emerald-700', dot: 'bg-emerald-500' },
+  Expired: { pill: 'border-rose-200/80 bg-rose-50 text-rose-700', dot: 'bg-rose-400' },
 }
 
 export default function QuotationsPage() {
@@ -25,6 +39,26 @@ export default function QuotationsPage() {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<'all' | QuotationStatus>('all')
   const [busy, setBusy] = useState<string | null>(null)
+
+  // Metrics
+  const stats = useMemo(() => {
+    const list = quotations ?? []
+    const totalCount = list.length
+    const totalValue = list.reduce((sum, q) => sum + q.totalAmount, 0)
+    const accepted = list.filter((q) => q.status === 'Accepted')
+    const acceptedValue = accepted.reduce((sum, q) => sum + q.totalAmount, 0)
+    const pendingSent = list.filter((q) => q.status === 'Sent' || q.status === 'Draft')
+    const pendingValue = pendingSent.reduce((sum, q) => sum + q.totalAmount, 0)
+
+    return {
+      totalCount,
+      totalValue,
+      acceptedCount: accepted.length,
+      acceptedValue,
+      pendingCount: pendingSent.length,
+      pendingValue,
+    }
+  }, [quotations])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -78,6 +112,17 @@ export default function QuotationsPage() {
     }
   }
 
+  function shareOnWhatsApp(qu: QuotationWithCustomer) {
+    if (!qu.customer?.phone) {
+      toast.warning('No phone number', 'This customer does not have a phone number saved.')
+      return
+    }
+    const cleanPhone = toWhatsAppNumber(qu.customer.phone)
+    const itemsList = qu.items.map((it) => `• ${it.name} (${it.quantity}x)`).join('\n')
+    const message = `Hello ${qu.customer.name},\n\nHere is your quotation ${qu.code} from Tech City:\nTotal: ${formatMoney(qu.totalAmount, settings.currency)}\n\nItems:\n${itemsList}\n\nPlease let us know if you would like us to proceed with the service!\nThank you!`
+    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer')
+  }
+
   async function onDelete(id: string, code: string) {
     const ok = await confirm({
       title: 'Delete this quotation?',
@@ -99,7 +144,7 @@ export default function QuotationsPage() {
       <PageHeader
         back="/"
         title="Quotations"
-        subtitle="Generate a quotation any time from a customer’s saved details"
+        subtitle="Manage estimates, share quotes via WhatsApp or PDF, and convert to active jobs with 1 click"
         actions={
           <Link className="btn-primary" to="/quotations/new">
             <Plus size={16} /> New Quotation
@@ -107,26 +152,95 @@ export default function QuotationsPage() {
         }
       />
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <input
-          className="input max-w-xs flex-1"
-          placeholder="Search by quotation no., customer, item…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <select
-          className="input w-auto"
-          value={status}
-          onChange={(e) => setStatus(e.target.value as 'all' | QuotationStatus)}
-          aria-label="Filter by status"
-        >
-          <option value="all">All statuses</option>
+      {/* CRM Pipeline Stat Strip */}
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="card p-4 flex items-center gap-3.5 border-l-4 border-l-brand-500">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+            <FileText size={18} />
+          </span>
+          <div>
+            <p className="text-[11.5px] font-semibold uppercase tracking-wider text-ink-400">Total Pipeline</p>
+            <p className="text-lg font-bold text-ink-900 leading-tight">
+              {formatMoney(stats.totalValue, settings.currency)}
+            </p>
+            <p className="text-[11.5px] text-ink-500 mt-0.5">{stats.totalCount} quotation{stats.totalCount === 1 ? '' : 's'}</p>
+          </div>
+        </div>
+
+        <div className="card p-4 flex items-center gap-3.5 border-l-4 border-l-emerald-500">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+            <CheckCircle2 size={18} />
+          </span>
+          <div>
+            <p className="text-[11.5px] font-semibold uppercase tracking-wider text-ink-400">Accepted Won</p>
+            <p className="text-lg font-bold text-emerald-700 leading-tight">
+              {formatMoney(stats.acceptedValue, settings.currency)}
+            </p>
+            <p className="text-[11.5px] text-ink-500 mt-0.5">{stats.acceptedCount} converted</p>
+          </div>
+        </div>
+
+        <div className="card p-4 flex items-center gap-3.5 border-l-4 border-l-blue-500">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+            <Clock size={18} />
+          </span>
+          <div>
+            <p className="text-[11.5px] font-semibold uppercase tracking-wider text-ink-400">Pending / In Review</p>
+            <p className="text-lg font-bold text-blue-700 leading-tight">
+              {formatMoney(stats.pendingValue, settings.currency)}
+            </p>
+            <p className="text-[11.5px] text-ink-500 mt-0.5">{stats.pendingCount} awaiting response</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Filter and Search Bar */}
+      <div className="card mb-4 p-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="relative min-w-[240px] flex-1">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
+          <input
+            className="input pl-9 pr-8 py-1.5 text-sm w-full"
+            placeholder="Search quotation no., customer, phone, item…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {query && (
+            <button
+              onClick={() => setQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-400 hover:text-ink-600"
+              aria-label="Clear search"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        {/* Status segment pills */}
+        <div className="flex items-center gap-1 overflow-x-auto">
+          <button
+            onClick={() => setStatus('all')}
+            className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-all ${
+              status === 'all'
+                ? 'bg-ink-900 text-white shadow-sm'
+                : 'text-ink-600 hover:bg-ink-100'
+            }`}
+          >
+            All
+          </button>
           {QUOTATION_STATUSES.map((s) => (
-            <option key={s} value={s}>
+            <button
+              key={s}
+              onClick={() => setStatus(s)}
+              className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-all ${
+                status === s
+                  ? 'bg-ink-900 text-white shadow-sm'
+                  : 'text-ink-600 hover:bg-ink-100'
+              }`}
+            >
               {s}
-            </option>
+            </button>
           ))}
-        </select>
+        </div>
       </div>
 
       {!filtered.length ? (
@@ -137,7 +251,7 @@ export default function QuotationsPage() {
             message={
               query || status !== 'all'
                 ? 'Try a different search or clear the filters.'
-                : 'Open a customer and press “Quotation”, or create one from a lead — you can send it as a PDF.'
+                : 'Create quotations for customer inquiries. Once accepted, convert them into active service jobs with 1 click.'
             }
             action={
               !query && status === 'all' ? (
@@ -149,78 +263,154 @@ export default function QuotationsPage() {
           />
         </div>
       ) : (
-        <ul className="space-y-2.5">
-          {filtered.map((qu) => (
-            <li key={qu.id} className="card flex items-start gap-3 p-4">
-              <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
-                <FileText size={17} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <p className="text-[15px] font-semibold text-ink-900">{qu.code}</p>
-                  <span className={`badge ${STATUS_STYLES[qu.status]}`}>{qu.status}</span>
-                  {qu.validUntil && (
-                    <span className="text-[12px] text-ink-400">valid till {formatDate(qu.validUntil)}</span>
-                  )}
-                </div>
-                <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12.5px] text-ink-500">
-                  <span>{formatDate(qu.date)}</span>
-                  {qu.customer ? (
-                    <Link to={`/customers/${qu.customer.id}`} className="text-brand-700 hover:underline">
-                      {qu.customer.name}
-                    </Link>
-                  ) : (
-                    <span className="text-ink-400">Customer deleted</span>
-                  )}
-                  <span className="hidden sm:inline">
-                    {qu.items.length} item{qu.items.length === 1 ? '' : 's'}
+        <ul className="space-y-3">
+          {filtered.map((qu) => {
+            const conf = STATUS_CONFIG[qu.status] ?? STATUS_CONFIG.Draft
+            return (
+              <li
+                key={qu.id}
+                className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between transition-all duration-200 hover:border-ink-300 hover:shadow-md"
+              >
+                <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-brand-100">
+                    <FileText size={20} />
                   </span>
-                </p>
-                {qu.notes && (
-                  <p className="mt-1.5 line-clamp-1 text-[12.5px] text-ink-600">{qu.notes}</p>
-                )}
-              </div>
-              <div className="shrink-0 text-right">
-                <p className="text-[15px] font-bold text-ink-900">
-                  {formatMoney(qu.totalAmount, settings.currency)}
-                </p>
-              </div>
-              <div className="flex shrink-0 gap-1">
-                <button
-                  className="btn-ghost px-2 py-1.5"
-                  onClick={() => openPdf(qu)}
-                  disabled={busy === qu.id}
-                  aria-label="View PDF"
-                  title="View PDF"
-                >
-                  <Eye size={15} />
-                </button>
-                <button
-                  className="btn-ghost px-2 py-1.5"
-                  onClick={() => downloadPdf(qu)}
-                  disabled={busy === qu.id}
-                  aria-label="Download PDF"
-                  title="Download PDF"
-                >
-                  <Download size={15} />
-                </button>
-                <Link
-                  className="btn-ghost px-2 py-1.5"
-                  to={`/quotations/${qu.id}/edit`}
-                  aria-label="Edit quotation"
-                >
-                  <Pencil size={15} />
-                </Link>
-                <button
-                  className="btn-ghost px-2 py-1.5 text-red-600 hover:bg-red-50"
-                  onClick={() => onDelete(qu.id, qu.code)}
-                  aria-label="Delete quotation"
-                >
-                  <Trash2 size={15} />
-                </button>
-              </div>
-            </li>
-          ))}
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                      <Link
+                        to={`/quotations/${qu.id}/edit`}
+                        className="text-[15px] font-bold text-ink-900 hover:text-brand-600 transition-colors"
+                      >
+                        {qu.code}
+                      </Link>
+                      <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${conf.pill}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${conf.dot}`} />
+                        {qu.status}
+                      </span>
+                      {qu.validUntil && (
+                        <span className="text-[11.5px] font-medium text-ink-400">
+                          Valid until {formatDate(qu.validUntil)}
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[13px] text-ink-600">
+                      {qu.customer ? (
+                        <Link
+                          to={`/customers/${qu.customer.id}`}
+                          className="font-semibold text-ink-900 hover:text-brand-600 hover:underline"
+                        >
+                          {qu.customer.name}
+                        </Link>
+                      ) : (
+                        <span className="text-ink-400">Customer deleted</span>
+                      )}
+                      {qu.customer?.phone && (
+                        <span className="text-ink-400">· {qu.customer.phone}</span>
+                      )}
+                      <span className="text-ink-400">· Created {formatDate(qu.date)}</span>
+                    </p>
+
+                    {/* Items pill preview */}
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      {qu.items.slice(0, 3).map((item) => (
+                        <span
+                          key={item.id}
+                          className="inline-flex items-center rounded-md bg-ink-100/70 px-2 py-0.5 text-[11px] font-medium text-ink-700"
+                        >
+                          {item.quantity}x {item.name}
+                        </span>
+                      ))}
+                      {qu.items.length > 3 && (
+                        <span className="text-[11px] font-medium text-ink-400">
+                          +{qu.items.length - 3} more
+                        </span>
+                      )}
+                    </div>
+
+                    {qu.notes && (
+                      <p className="mt-1.5 line-clamp-1 text-[12px] italic text-ink-500">{qu.notes}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Amount and CRM Actions */}
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-ink-100 pt-3 sm:border-t-0 sm:pt-0 sm:flex-col sm:items-end sm:justify-center">
+                  <div className="text-left sm:text-right">
+                    <p className="text-[11px] uppercase font-bold tracking-wider text-ink-400">Total Amount</p>
+                    <p className="text-lg font-bold text-ink-900 leading-tight">
+                      {formatMoney(qu.totalAmount, settings.currency)}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    {/* 1-Click Convert to Service Job */}
+                    <Link
+                      to={`/services/new?quotationId=${qu.id}&customerId=${qu.customerId}`}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-xs font-semibold text-brand-700 transition-all hover:border-brand-400 hover:bg-brand-100/70"
+                      title="Convert this quotation into an active Service Job"
+                    >
+                      <Briefcase size={13} className="text-brand-600" />
+                      <span>Convert to Job</span>
+                    </Link>
+
+                    {/* WhatsApp Quick Share */}
+                    <button
+                      onClick={() => shareOnWhatsApp(qu)}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 transition-all hover:border-emerald-300 hover:bg-emerald-100/70"
+                      title="Share Quote on WhatsApp"
+                      aria-label="Share Quote on WhatsApp"
+                    >
+                      <MessageCircle size={14} />
+                    </button>
+
+                    {/* View PDF */}
+                    <button
+                      className="btn-ghost p-1.5 text-ink-600"
+                      onClick={() => openPdf(qu)}
+                      disabled={busy === qu.id}
+                      aria-label="View PDF"
+                      title="View PDF"
+                    >
+                      <Eye size={15} />
+                    </button>
+
+                    {/* Download PDF */}
+                    <button
+                      className="btn-ghost p-1.5 text-ink-600"
+                      onClick={() => downloadPdf(qu)}
+                      disabled={busy === qu.id}
+                      aria-label="Download PDF"
+                      title="Download PDF"
+                    >
+                      <Download size={15} />
+                    </button>
+
+                    {/* Edit */}
+                    <Link
+                      className="btn-ghost p-1.5 text-ink-600"
+                      to={`/quotations/${qu.id}/edit`}
+                      aria-label="Edit quotation"
+                      title="Edit quotation"
+                    >
+                      <Pencil size={15} />
+                    </Link>
+
+                    {/* Delete */}
+                    <button
+                      className="btn-ghost p-1.5 text-rose-600 hover:bg-rose-50"
+                      onClick={() => onDelete(qu.id, qu.code)}
+                      aria-label="Delete quotation"
+                      title="Delete quotation"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                </div>
+              </li>
+            )
+          })}
         </ul>
       )}
     </>

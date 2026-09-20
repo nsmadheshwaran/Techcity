@@ -2,16 +2,13 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Eye, FileText, Pencil, Trash2 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
-import {
-  applyFilters,
-  EMPTY_FILTERS,
-  ServiceFilters,
-  type FilterState,
-} from '@/components/services/ServiceFilters'
+import { ServiceFilters, type FilterState } from '@/components/services/ServiceFilters'
+import { applyFilters, EMPTY_FILTERS } from '@/components/services/serviceFiltersHelper'
 import { DocumentActions } from '@/components/services/DocumentActions'
 import { PaymentBadge, StatusBadge } from '@/components/ui/Badges'
 import { EmptyState, SkeletonRows } from '@/components/ui/States'
-import { Pagination, usePagination } from '@/components/ui/Pagination'
+import { Pagination } from '@/components/ui/Pagination'
+import { usePagination } from '@/components/ui/usePagination'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useToast } from '@/components/ui/Toast'
 import { useCustomerMap, useServices, useSettings } from '@/hooks/useData'

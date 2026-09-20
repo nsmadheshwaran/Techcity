@@ -122,6 +122,12 @@ export async function updateQuotation(
   return updated
 }
 
+export async function updateQuotationStatus(id: string, status: QuotationStatus): Promise<void> {
+  const existing = await db.quotations.get(id)
+  if (!existing) return
+  await db.quotations.update(id, { status, updatedAt: nowISO() })
+}
+
 export async function deleteQuotation(id: string) {
   await db.quotations.delete(id)
 }

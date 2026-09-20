@@ -116,6 +116,11 @@ export interface SyncOutboxRow {
 
 export const db = new TechCityDB()
 
+if (typeof window !== 'undefined') {
+  ;(window as any).Dexie = Dexie
+  ;(window as any).db = db
+}
+
 /**
  * Orders service parts the way the technician entered them.
  * Falls back to createdAt for rows written before the `position` column

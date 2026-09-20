@@ -5,7 +5,8 @@ import { PageHeader } from '@/components/PageHeader'
 import { PaymentModal } from '@/components/services/PaymentModal'
 import { PaymentBadge } from '@/components/ui/Badges'
 import { EmptyState, SkeletonRows } from '@/components/ui/States'
-import { Pagination, usePagination } from '@/components/ui/Pagination'
+import { Pagination } from '@/components/ui/Pagination'
+import { usePagination } from '@/components/ui/usePagination'
 import { StatCard } from '@/components/StatCard'
 import { useToast } from '@/components/ui/Toast'
 import { useCustomerMap, usePayments, useServices, useSettings } from '@/hooks/useData'
@@ -23,7 +24,10 @@ export default function PaymentsPage() {
   const customerMap = useCustomerMap()
   const settings = useSettings()
   const [searchParams] = useSearchParams()
-  const [tab, setTab] = useState<Tab>(searchParams.get('filter') === 'pending' ? 'pending' : 'pending')
+  const [tab, setTab] = useState<Tab>(() => {
+    const f = searchParams.get('filter') || searchParams.get('tab')
+    return f === 'transactions' ? 'transactions' : 'pending'
+  })
   const [query, setQuery] = useState('')
   const [payService, setPayService] = useState<Service | undefined>()
 

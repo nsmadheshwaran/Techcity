@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   AlertTriangle,
   Building2,
+  Cloud,
   Database,
   FileText,
   Lock,
@@ -31,12 +33,13 @@ import { clearDemoData, demoAllowed, seedDemoData } from '@/services/seed'
 import { readFileAsDataURL, readFileAsText } from '@/utils/csv'
 import { CloudStatusCard } from '@/cloud/CloudGate'
 
-type Tab = 'business' | 'documents' | 'services' | 'security' | 'backup'
+type Tab = 'business' | 'documents' | 'services' | 'cloud' | 'security' | 'backup'
 
 const TABS: { key: Tab; label: string; icon: typeof Building2 }[] = [
   { key: 'business', label: 'Business', icon: Building2 },
   { key: 'documents', label: 'PDF & Invoice', icon: FileText },
   { key: 'services', label: 'Service Defaults', icon: Settings2 },
+  { key: 'cloud', label: 'Cloud Sync', icon: Cloud },
   { key: 'security', label: 'Security', icon: Lock },
   { key: 'backup', label: 'Backup & Export', icon: Database },
 ]
@@ -44,7 +47,13 @@ const TABS: { key: Tab; label: string; icon: typeof Building2 }[] = [
 export default function SettingsPage() {
   const settings = useSettings()
   const toast = useToast()
-  const [tab, setTab] = useState<Tab>('business')
+  const [searchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab') as Tab
+  const [tab, setTab] = useState<Tab>(
+    tabParam && ['business', 'documents', 'services', 'cloud', 'security', 'backup'].includes(tabParam)
+      ? tabParam
+      : 'business',
+  )
 
   return (
     <>
@@ -62,7 +71,7 @@ export default function SettingsPage() {
                 onClick={() => setTab(key)}
                 className={`flex min-w-0 flex-1 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-[13px] font-medium transition-colors sm:flex-none sm:text-[13.5px] lg:w-full ${
                   tab === key
-                    ? 'bg-brand-50 text-brand-700'
+                    ? 'bg-brand-50 text-brand-700 font-semibold'
                     : 'text-ink-600 hover:bg-ink-100 hover:text-ink-900'
                 }`}
               >
@@ -76,6 +85,11 @@ export default function SettingsPage() {
           {tab === 'business' && <BusinessTab settings={settings} toast={toast} />}
           {tab === 'documents' && <DocumentsTab settings={settings} toast={toast} />}
           {tab === 'services' && <ServiceDefaultsTab settings={settings} toast={toast} />}
+          {tab === 'cloud' && (
+            <div className="space-y-4">
+              <CloudStatusCard />
+            </div>
+          )}
           {tab === 'security' && <SecurityTab toast={toast} />}
           {tab === 'backup' && <BackupTab toast={toast} />}
         </div>
