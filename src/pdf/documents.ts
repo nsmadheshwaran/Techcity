@@ -10,25 +10,24 @@ import type {
   Service,
   ServicePart,
 } from '@/types'
-import { formatAmount, formatDateLong, formatDateShort } from '@/utils/format'
+import { formatAmount, formatDateShort } from '@/utils/format'
 
 /**
- * PDF generation for Service / Installation Reports (Delivery Challan format),
- * Invoices, Receipts, Customer History and Quotations.
+ * Standard A4 PDF generation for Techcity Technology:
+ * - Quotation / Purchase Order (Tally ERP style grid layout)
+ * - Service / Installation Report (Authentic job card & work completion certificate)
+ * - Tax Invoice (Tally ERP style with HSN/SAC breakdown & Bank Details)
  *
- * Uses jsPDF + autotable with a hand-built layout so output is print ready A4,
- * with no external assets (works fully offline).
+ * Uses the company's original logo (logo-tc.jpg) and works fully offline.
  */
 
-const BRAND: [number, number, number] = [26, 55, 181] // #1a37b5
-const INK: [number, number, number] = [34, 38, 47]
-const MUTED: [number, number, number] = [102, 117, 149]
-const LINE: [number, number, number] = [213, 218, 227]
-const LIGHT: [number, number, number] = [246, 247, 249]
+const INK: [number, number, number] = [20, 20, 20]
+const LINE: [number, number, number] = [60, 60, 60]
+const BRAND_ORANGE: [number, number, number] = [190, 75, 20]
 
-const M = 14 // page margin
+const M = 10 // page margin in mm
 const PAGE_W = 210
-const CONTENT_W = PAGE_W - M * 2
+const CONTENT_W = PAGE_W - M * 2 // 190 mm
 
 export interface DocInput {
   kind: DocKind
@@ -45,43 +44,67 @@ export interface QuotationDocInput {
   settings: BusinessSettings
 }
 
-const TITLES: Record<DocKind, string> = {
-  report: 'SERVICE / INSTALLATION REPORT',
-  invoice: 'TAX INVOICE',
-  receipt: 'PAYMENT RECEIPT',
-  history: 'CUSTOMER HISTORY',
-  quotation: 'QUOTATION',
-}
-
-/** jsPDF's built-in fonts are Latin-1 only — ₹ renders as a blank box, so use "Rs." */
-function money(n: number): string {
-  return `Rs. ${formatAmount(n)}`
-}
+/* ------------------------------------------------------------------ */
+/* Text & Number to Words helpers                                     */
+/* ------------------------------------------------------------------ */
 
 function clean(text?: string | null): string {
   if (!text) return ''
-  // Replace characters outside WinAnsi with safe equivalents
   return String(text)
-    .replace(/₹/g, 'Rs.')
+    .replace(/₹/g, 'Rs. ')
     .replace(/[•·]/g, '-')
     .replace(/[–—]/g, '-')
     .replace(/[\u201c\u201d]/g, '"')
     .replace(/[\u2018\u2019]/g, "'")
 }
 
-function docTitle(kind: DocKind, service: Service, settings: BusinessSettings): string {
-  if (kind === 'invoice') return `${settings.invoicePrefix || 'TC-INV-'}${service.code.replace(/^TC-SRV-/, '')}`
-  return service.code
+export function numberToWordsIndian(amount: number): string {
+  if (!amount || amount === 0) return 'Zero'
+  const abs = Math.abs(amount)
+  const integerPart = Math.floor(abs)
+  const decimalPart = Math.round((abs - integerPart) * 100)
+
+  const a = [
+    '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
+    'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen',
+  ]
+  const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
+
+  function convertTwoDigits(n: number): string {
+    if (n < 20) return a[n]
+    return b[Math.floor(n / 10)] + (n % 10 ? ' ' + a[n % 10] : '')
+  }
+
+  function convertThreeDigits(n: number): string {
+    if (n === 0) return ''
+    if (n < 100) return convertTwoDigits(n)
+    return a[Math.floor(n / 100)] + ' Hundred' + (n % 100 ? ' ' + convertTwoDigits(n % 100) : '')
+  }
+
+  let n = integerPart
+  const crore = Math.floor(n / 10000000)
+  n %= 10000000
+  const lakh = Math.floor(n / 100000)
+  n %= 100000
+  const thousand = Math.floor(n / 1000)
+  n %= 1000
+  const remainder = n
+
+  const parts: string[] = []
+  if (crore) parts.push(convertTwoDigits(crore) + ' Crore')
+  if (lakh) parts.push(convertTwoDigits(lakh) + ' Lakh')
+  if (thousand) parts.push(convertTwoDigits(thousand) + ' Thousand')
+  if (remainder) parts.push(convertThreeDigits(remainder))
+
+  const words = parts.join(' ').trim() || 'Zero'
+  let result = words
+
+  if (decimalPart > 0) {
+    result += ` and ${convertTwoDigits(decimalPart)} paise`
+  }
+  return result
 }
 
-/* ------------------------------------------------------------------ */
-/* Logo resolution                                                     */
-/* ------------------------------------------------------------------ */
-
-/**
- * The business logo: the one uploaded in Settings, falling back to the TC
- * logo bundled with the app, then a drawn placeholder as a last resort.
- */
 function resolveLogo(settings: BusinessSettings): { data: string; format: 'PNG' | 'JPEG' } | null {
   const src = settings.logoDataUrl || logoDefault
   if (!src) return null
@@ -89,985 +112,1022 @@ function resolveLogo(settings: BusinessSettings): { data: string; format: 'PNG' 
   return { data: src, format: fmt }
 }
 
-/* ------------------------------------------------------------------ */
-/* Shared letterhead / footer                                          */
-/* ------------------------------------------------------------------ */
-
-/** Company block (logo + name + tagline + contact lines). Returns the y below it. */
-function drawCompanyBlock(doc: jsPDF, settings: BusinessSettings, y: number): number {
-  const logo = resolveLogo(settings)
-  const logoSize = 17
-  if (logo) {
-    try {
-      doc.addImage(logo.data, logo.format, M, y, logoSize, logoSize, undefined, 'FAST')
-    } catch {
-      drawLogoPlaceholder(doc, M, y, logoSize)
-    }
-  } else {
-    drawLogoPlaceholder(doc, M, y, logoSize)
-  }
-
-  const textX = M + logoSize + 5
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(16)
-  doc.setTextColor(...BRAND)
-  doc.text(clean(settings.name || 'TECH CITY TECHNOLOGY'), textX, y + 6)
-
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8.5)
-  doc.setTextColor(...MUTED)
-  doc.text(clean(settings.tagline), textX, y + 11)
-
-  const contactLines = [
-    clean(settings.address),
-    [settings.phone, settings.altPhone].filter(Boolean).map(clean).join('  |  '),
-    [settings.email, settings.website].filter(Boolean).map(clean).join('  |  '),
-  ].filter(Boolean)
-
-  doc.setFontSize(7.8)
-  let cy = y + 15.5
-  for (const line of contactLines) {
-    const wrapped = doc.splitTextToSize(line, CONTENT_W - logoSize - 5 - 46)
-    for (const w of wrapped) {
-      doc.text(w, textX, cy)
-      cy += 3.4
-    }
-  }
-
-  if (settings.gstEnabled && settings.gstNumber) {
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    doc.setTextColor(...INK)
-    doc.text(`GSTIN: ${clean(settings.gstNumber)}`, textX, cy + 0.4)
-    cy += 4
-  }
-  return cy
+function docTitle(kind: DocKind, service: Service, settings: BusinessSettings): string {
+  if (kind === 'invoice') return `${settings.invoicePrefix || 'TCT/'}${service.code.replace(/^TC-SRV-/, '')}/25-26`
+  return service.code
 }
 
-/** Modern document header — company block left, document label right. */
-function drawHeader(doc: jsPDF, input: DocInput): number {
-  const { settings, service, kind } = input
-  let y = M
-
-  // Top brand bar
-  doc.setFillColor(...BRAND)
-  doc.rect(0, 0, PAGE_W, 3, 'F')
-  y = 12
-
-  const cy = drawCompanyBlock(doc, settings, y)
-
-  // Document label block (right aligned)
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.setTextColor(...INK)
-  doc.text(TITLES[kind], PAGE_W - M, y + 5, { align: 'right' })
-
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8.5)
-  doc.setTextColor(...MUTED)
-  doc.text(`No: ${docTitle(kind, service, input.settings)}`, PAGE_W - M, y + 10.5, { align: 'right' })
-  doc.text(`Date: ${formatDateShort(service.serviceDate)}`, PAGE_W - M, y + 15, { align: 'right' })
-  if (kind !== 'receipt') {
-    doc.text(`Status: ${clean(service.status)}`, PAGE_W - M, y + 19.5, { align: 'right' })
-  }
-
-  const headerBottom = Math.max(cy, y + 23)
-  doc.setDrawColor(...LINE)
-  doc.setLineWidth(0.4)
-  doc.line(M, headerBottom, PAGE_W - M, headerBottom)
-  return headerBottom + 6
-}
-
-function drawLogoPlaceholder(doc: jsPDF, x: number, y: number, size: number) {
-  doc.setFillColor(...BRAND)
-  doc.roundedRect(x, y, size, size, 2.5, 2.5, 'F')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
-  doc.setTextColor(255, 255, 255)
-  doc.text('TCT', x + size / 2, y + size / 2 + 3, { align: 'center' })
-}
-
-function drawFooter(doc: jsPDF, input: DocInput) {
-  const pageCount = doc.getNumberOfPages()
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i)
-    const h = doc.internal.pageSize.getHeight()
-
-    doc.setDrawColor(...LINE)
-    doc.setLineWidth(0.3)
-    doc.line(M, h - 16, PAGE_W - M, h - 16)
-
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
-    doc.setTextColor(...BRAND)
-    doc.text(clean(input.settings.footerText || 'Thank you for choosing TECH CITY TECHNOLOGY'), PAGE_W / 2, h - 11, {
-      align: 'center',
-    })
-
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7)
-    doc.setTextColor(...MUTED)
-    doc.text(
-      `${clean(input.settings.phone)}  |  ${clean(input.settings.email)}`,
-      PAGE_W / 2,
-      h - 7,
-      { align: 'center' },
-    )
-    doc.text(`Page ${i} of ${pageCount}`, PAGE_W - M, h - 7, { align: 'right' })
-    doc.text('Computer generated document', M, h - 7)
-  }
-}
-
-/* ------------------------------------------------------------------ */
-/* Shared drawing helpers                                              */
-/* ------------------------------------------------------------------ */
-
-function sectionTitle(doc: jsPDF, title: string, y: number): number {
-  doc.setFillColor(...BRAND)
-  doc.rect(M, y - 3.6, 1.6, 4.6, 'F')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9.5)
-  doc.setTextColor(...INK)
-  doc.text(title.toUpperCase(), M + 4, y)
-  return y + 4.5
-}
-
-/** Full-width dark bar used for the challan's section headings. */
-function bandTitle(doc: jsPDF, title: string, y: number): number {
-  doc.setFillColor(...BRAND)
-  doc.rect(M, y - 4.2, CONTENT_W, 6.4, 'F')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
-  doc.setTextColor(255, 255, 255)
-  doc.text(clean(title).toUpperCase(), PAGE_W / 2, y + 0.4, { align: 'center' })
-  return y + 5.6
-}
-
-/** Two-column key/value grid inside a light panel. */
-function infoPanel(
-  doc: jsPDF,
-  y: number,
-  rows: [string, string][],
-  columns = 2,
-): number {
-  const visible = rows.filter(([, v]) => v && v !== '—')
-  if (!visible.length) return y
-  const colW = CONTENT_W / columns
-  const lineH = 5
-  const perCol = Math.ceil(visible.length / columns)
-  const boxH = perCol * lineH + 5
-
-  doc.setFillColor(...LIGHT)
-  doc.setDrawColor(...LINE)
-  doc.setLineWidth(0.2)
-  doc.roundedRect(M, y, CONTENT_W, boxH, 1.6, 1.6, 'FD')
-
-  visible.forEach((row, idx) => {
-    const col = Math.floor(idx / perCol)
-    const rowIdx = idx % perCol
-    const x = M + col * colW + 3.5
-    const ty = y + 5.5 + rowIdx * lineH
-
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7.8)
-    doc.setTextColor(...MUTED)
-    doc.text(clean(row[0]), x, ty)
-
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8.6)
-    doc.setTextColor(...INK)
-    const value = doc.splitTextToSize(clean(row[1]), colW - 32)[0] ?? ''
-    doc.text(value, x + 30, ty)
-  })
-
-  return y + boxH + 5
-}
-
-/** Long-form text block (complaint, diagnosis, work performed). */
-function textBlock(doc: jsPDF, y: number, label: string, value?: string): number {
-  if (!value?.trim()) return y
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
-  doc.setTextColor(...MUTED)
-  doc.text(clean(label).toUpperCase(), M, y)
-
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.setTextColor(...INK)
-  const lines = doc.splitTextToSize(clean(value), CONTENT_W)
-  doc.text(lines, M, y + 4.2)
-  return y + 4.2 + lines.length * 4.1 + 3
-}
-
-function pageBreakIfNeeded(doc: jsPDF, y: number, needed = 40): number {
-  const h = doc.internal.pageSize.getHeight()
-  if (y + needed > h - 22) {
-    doc.addPage()
-    return M + 4
-  }
-  return y
-}
-
-/** Draws a labelled checkbox at (x, yBaseline). Returns the x after the label. */
-function checkbox(
-  doc: jsPDF,
-  x: number,
-  y: number,
-  label: string,
-  checked: boolean,
-): number {
+function drawCheckbox(doc: jsPDF, x: number, y: number, label: string, checked: boolean): number {
   const size = 3
-  const gap = 1.4
   doc.setDrawColor(...INK)
-  doc.setLineWidth(0.3)
-  doc.rect(x, y - size + 0.5, size, size, 'S')
+  doc.setLineWidth(0.25)
+  doc.rect(x, y - 2.5, size, size, 'S')
   if (checked) {
-    doc.setFillColor(...BRAND)
-    doc.rect(x + 0.4, y - size + 0.9, size - 0.8, size - 0.8, 'F')
+    doc.setFillColor(...INK)
+    doc.rect(x + 0.5, y - 2, size - 1, size - 1, 'F')
   }
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
   doc.setTextColor(...INK)
-  doc.text(clean(label), x + size + gap, y)
-  return x + size + gap + doc.getTextWidth(clean(label)) + 4.5
-}
-
-/** Field row: label left, then an underline (or the value) running to width. */
-function fieldRow(
-  doc: jsPDF,
-  y: number,
-  label: string,
-  value: string,
-  opts: { labelW?: number; valueWidth?: number; boldValue?: boolean } = {},
-): void {
-  const labelW = opts.labelW ?? 46
-  const valueWidth = opts.valueWidth ?? CONTENT_W - labelW
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8.5)
-  doc.setTextColor(...MUTED)
-  doc.text(clean(label), M, y)
-
-  doc.setFont('helvetica', opts.boldValue ? 'bold' : 'normal')
-  doc.setFontSize(9)
-  doc.setTextColor(...INK)
-  const v = clean(value)
-  const lineX = M + labelW
-  if (v) {
-    doc.text(v, lineX, y)
-  } else {
-    doc.setDrawColor(...LINE)
-    doc.setLineWidth(0.25)
-    doc.line(lineX, y + 0.5, lineX + valueWidth, y + 0.5)
-  }
+  doc.text(clean(label), x + size + 1.5, y)
+  return x + size + 1.5 + doc.getTextWidth(clean(label)) + 4
 }
 
 /* ------------------------------------------------------------------ */
-/* Delivery Challan (Service / Installation Report)                    */
-/* ------------------------------------------------------------------ */
-
-/**
- * Builds the Service Report in the shop's Delivery Challan format — the same
- * form the business prints: customer block, service nature + equipment type
- * checkboxes, product information, complaint / action taken, and a work
- * completion certificate with signatures.
- */
-export function buildChallanDocument(input: DocInput): jsPDF {
-  const { service, customer, parts, settings } = input
-  const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true })
-  doc.setProperties({
-    title: `SERVICE / INSTALLATION REPORT ${service.code}`,
-    subject: `${service.serviceType} - ${customer.name}`,
-    author: settings.name,
-    creator: settings.name,
-  })
-
-  // ---- Letterhead -------------------------------------------------
-  let y = 13
-  doc.setFillColor(...BRAND)
-  doc.rect(0, 0, PAGE_W, 3, 'F')
-  const cy = drawCompanyBlock(doc, settings, y)
-
-  // Right-aligned document identity
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.setTextColor(...INK)
-  doc.text('SERVICE / INSTALLATION REPORT', PAGE_W - M, y + 5, { align: 'right' })
-
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8.5)
-  doc.setTextColor(...MUTED)
-  doc.text(`S. No: ${clean(service.code)}`, PAGE_W - M, y + 10.5, { align: 'right' })
-  doc.text(`Date: ${formatDateShort(service.serviceDate)}`, PAGE_W - M, y + 15, { align: 'right' })
-  doc.text(`Status: ${clean(service.status)}`, PAGE_W - M, y + 19.5, { align: 'right' })
-
-  const headerBottom = Math.max(cy, y + 23)
-  doc.setDrawColor(...LINE)
-  doc.setLineWidth(0.4)
-  doc.line(M, headerBottom, PAGE_W - M, headerBottom)
-  y = headerBottom + 5
-
-  // ---- Customer + service details panel ---------------------------
-  const product = service.product ? clean(service.product) : ''
-
-  const isNewInstallation = /install/i.test(service.serviceType)
-  const isWarranty = /warrant/i.test(service.serviceType)
-  const isAmc = /amc/i.test(service.serviceType)
-  const isOnCall = !isNewInstallation && !isWarranty && !isAmc
-
-  const p = product.toLowerCase()
-  const isCctv = /cctv|camera|dvr|nvr/i.test(p)
-  const isLaptop = /laptop|notebook/i.test(p)
-  const isDesktop = /desktop|pc|computer|cpu/i.test(p)
-  const equipmentTicked = isCctv ? 'CCTV Analog / IP' : isLaptop ? 'Laptop' : isDesktop ? 'Desktop' : 'Others'
-
-  // Plain detail rows (full width)
-  const rows: [string, string][] = [
-    ['Customer Name', customer.name],
-    ['Address', [customer.address, customer.city, customer.pincode].filter(Boolean).join(', ')],
-    ['Contact Person', ''],
-    ['Landline / Mobile No', [customer.phone, customer.altPhone].filter(Boolean).join(' / ')],
-  ]
-
-  const rowH = 7.2
-  const labelW = 56
-  const available = CONTENT_W - labelW - 4
-
-  // Pre-wrap the detail values so long addresses fold instead of overflowing
-  const prepped = rows.map(([label, value]) => {
-    const full = clean(value)
-    const wrapped = full ? doc.splitTextToSize(full, available) : []
-    return {
-      label: `${label} :`,
-      first: (wrapped[0] as string | undefined) ?? full,
-      extra: (wrapped.slice(1, 3) as string[]) ?? [],
-    }
-  })
-
-  const detailH = prepped.reduce((sum, r) => sum + rowH + r.extra.length * 3.4, 0)
-  const panelH = detailH + rowH * 2 + 5 // + 2 checkbox rows + padding
-  const boxTop = y
-
-  doc.setDrawColor(...LINE)
-  doc.setLineWidth(0.3)
-  doc.roundedRect(M, boxTop, CONTENT_W, panelH, 1.2, 1.2, 'S')
-
-  let ry = boxTop + 5.4
-  prepped.forEach((r) => {
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.5)
-    doc.setTextColor(...MUTED)
-    doc.text(clean(r.label), M, ry)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
-    doc.setTextColor(...INK)
-    if (r.first) {
-      doc.text(r.first, M + labelW, ry)
-    } else {
-      doc.setDrawColor(...LINE)
-      doc.setLineWidth(0.25)
-      doc.line(M + labelW, ry + 0.5, M + labelW + available, ry + 0.5)
-    }
-    if (r.extra.length) {
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(8.2)
-      doc.setTextColor(...INK)
-      doc.text(r.extra, M + labelW, ry + 3.6)
-    }
-    ry += rowH + r.extra.length * 3.4
-  })
-
-  // Service Type checkboxes
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
-  doc.setTextColor(...MUTED)
-  doc.text('Service Type :', M, ry)
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
-  let cx = M + labelW
-  cx = checkbox(doc, cx, ry, 'New Installation', isNewInstallation)
-  cx = checkbox(doc, cx, ry, 'Warranty', isWarranty)
-  cx = checkbox(doc, cx, ry, 'AMC', isAmc)
-  checkbox(doc, cx, ry, 'On Call Charges', isOnCall)
-  ry += rowH
-
-  // Equipment Type checkboxes
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
-  doc.setTextColor(...MUTED)
-  doc.text('Equipment Type :', M, ry)
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
-  cx = M + labelW
-  cx = checkbox(doc, cx, ry, 'CCTV Analog / IP', equipmentTicked === 'CCTV Analog / IP')
-  cx = checkbox(doc, cx, ry, 'Laptop', equipmentTicked === 'Laptop')
-  cx = checkbox(doc, cx, ry, 'Desktop', equipmentTicked === 'Desktop')
-  checkbox(doc, cx, ry, 'Others', equipmentTicked === 'Others')
-
-  y = boxTop + panelH + 7
-
-  // ---- Installation / Service product information -----------------
-  y = pageBreakIfNeeded(doc, y, 55)
-  y = bandTitle(doc, 'Installation / Service Product Information', y) + 1
-
-  const descLines: string[] = []
-  if (service.product) {
-    const extra = [service.brand, service.model].filter(Boolean).join(' ')
-    const withSerial = service.serialNumber
-      ? `${service.product}${extra ? ` (${extra})` : ''} — SN: ${service.serialNumber}`
-      : `${service.product}${extra ? ` (${extra})` : ''}`
-    descLines.push(withSerial)
-  }
-  parts.forEach((p2) => {
-    descLines.push(
-      `${p2.name}${p2.quantity > 1 ? `  x${p2.quantity}` : ''}${
-        p2.unitPrice > 0 ? `  @ Rs. ${formatAmount(p2.unitPrice)}` : ''
-      }`,
-    )
-  })
-  if (!descLines.length) descLines.push('—')
-
-  const body = descLines.map((d, i) => [String(i + 1), clean(d)])
-  autoTable(doc, {
-    startY: y,
-    head: [['S No', 'Product Description']],
-    body,
-    theme: 'grid',
-    margin: { left: M, right: M },
-    styles: { font: 'helvetica', fontSize: 8.2, cellPadding: 2, textColor: INK, lineColor: LINE, lineWidth: 0.15 },
-    headStyles: { fillColor: [235, 238, 243], textColor: INK, fontStyle: 'bold', fontSize: 8 },
-    columnStyles: { 0: { cellWidth: 14, halign: 'center' }, 1: { cellWidth: 'auto' } },
-  })
-  // @ts-expect-error - lastAutoTable is added by jspdf-autotable at runtime
-  y = (doc.lastAutoTable?.finalY ?? y) + 4
-
-  // ---- Remaining job-sheet fields ---------------------------------
-  y = pageBreakIfNeeded(doc, y, 62)
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8.5)
-
-  const replaced = parts.length > 0
-  fieldRow(doc, y, 'Wiring Measurement in Mtrs :', '', { labelW: 60 })
-  fieldRow(doc, y + 8, 'Person got Trained (Name, Designation, Contact No) :', '', { labelW: 88 })
-
-  // Product replaced: Yes / No checkboxes, then "Specify"
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8.5)
-  doc.setTextColor(...MUTED)
-  doc.text('Whether Product replaced :', M, y + 16)
-  let bx = M + 50
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
-  bx = checkbox(doc, bx, y + 16, 'Yes', replaced)
-  bx = checkbox(doc, bx, y + 16, 'No', !replaced)
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8.5)
-  doc.setTextColor(...INK)
-  doc.text(`Specify : ${parts.map((p2) => clean(p2.name)).join(', ') || 'N/A'}`, bx + 2, y + 16)
-
-  y += 29
-
-  // Compact labelled blocks for complaint / action / remarks
-  function jobBlock(doc: jsPDF, y: number, label: string, value?: string): number {
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    doc.setTextColor(...MUTED)
-    doc.text(clean(label).toUpperCase(), M, y)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.6)
-    doc.setTextColor(...INK)
-    const lines = doc.splitTextToSize(clean(value) || '—', CONTENT_W)
-    doc.text(lines, M, y + 3.6)
-    return y + 3.6 + lines.length * 4 + 4.5
-  }
-
-  y = jobBlock(doc, y, 'Nature of Complaint', service.complaint)
-  y = jobBlock(doc, y, 'Action Taken', [service.diagnosis, service.workPerformed].filter(Boolean).join('  •  '))
-  y = jobBlock(doc, y, 'Customer Remarks / Feed Back', service.notes)
-
-  // ---- Work completion certificate --------------------------------
-  y = pageBreakIfNeeded(doc, y, 64)
-  y = bandTitle(doc, 'Work Completion Certificate', y) + 1
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8.4)
-  doc.setTextColor(...INK)
-  const installOf = product
-    ? `Installation of "${product}"`
-    : 'Installation'
-  const certSentence = service.serviceType
-    ? `${installOf} (Service: ${clean(service.serviceType)}) for "${clean(
-        customer.name,
-      )}" has been successfully completed on ${formatDateShort(service.serviceDate)}.`
-    : `${installOf} for "${clean(
-        customer.name,
-      )}" has been successfully completed on ${formatDateShort(service.serviceDate)}.`
-  const certText = doc.splitTextToSize(certSentence, CONTENT_W - 6)
-  doc.text(certText, M + 2, y + 1.5)
-  y += 2.5 + certText.length * 4.2
-
-  // Dates + time row
-  const halfW = (CONTENT_W - 8) / 2
-  fieldRow(doc, y, 'Installation Commenced Date', service.serviceDate, { labelW: 52, valueWidth: halfW - 40, boldValue: true })
-  fieldRow(doc, y, 'Completed Date', '', { labelW: 38, valueWidth: halfW - 8 })
-  y += 7.5
-  fieldRow(doc, y, 'TIME IN :', '', { labelW: 30, valueWidth: halfW - 14 })
-  fieldRow(doc, y, 'TIME OUT :', '', { labelW: 30, valueWidth: halfW - 14 })
-  y += 14
-
-  // Signatures
-  doc.setDrawColor(...LINE)
-  doc.setLineWidth(0.3)
-  doc.line(M, y, M + 60, y)
-  doc.line(PAGE_W - M - 60, y, PAGE_W - M, y)
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
-  doc.setTextColor(...MUTED)
-  doc.text('Customer Representative Sign', M, y + 4.5)
-  doc.text('Company Seal and Date', M, y + 9)
-  doc.text(`For ${clean(settings.name)}`, PAGE_W - M, y + 4.5, { align: 'right' })
-  doc.text(
-    service.technician ? `Service Engineer Sign (${clean(service.technician)})` : 'Service Engineer Sign',
-    PAGE_W - M,
-    y + 9,
-    { align: 'right' },
-  )
-
-  return doc
-}
-
-/* ------------------------------------------------------------------ */
-/* Quotation                                                           */
+/* 1. Quotation Document (PDF 1 - Purchase Order / Quotation Format)  */
 /* ------------------------------------------------------------------ */
 
 export function buildQuotationDocument(input: QuotationDocInput): jsPDF {
   const { quotation, customer, settings } = input
   const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true })
+
   doc.setProperties({
     title: `Quotation ${quotation.code}`,
-    subject: `${customer.name} - ${customer.code}`,
-    author: settings.name,
-    creator: settings.name,
+    subject: `Quotation for ${customer.name}`,
+    author: settings.name || 'TECHCITY TECHNOLOGY',
+    creator: settings.name || 'TECHCITY TECHNOLOGY',
   })
 
-  let y = 13
-  doc.setFillColor(...BRAND)
-  doc.rect(0, 0, PAGE_W, 3, 'F')
-  const cy = drawCompanyBlock(doc, settings, y)
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.setTextColor(...INK)
-  doc.text('QUOTATION', PAGE_W - M, y + 5, { align: 'right' })
-
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8.5)
-  doc.setTextColor(...MUTED)
-  doc.text(`No: ${clean(quotation.code)}`, PAGE_W - M, y + 10.5, { align: 'right' })
-  doc.text(`Date: ${formatDateShort(quotation.date)}`, PAGE_W - M, y + 15, { align: 'right' })
-  if (quotation.validUntil) {
-    doc.text(`Valid until: ${formatDateShort(quotation.validUntil)}`, PAGE_W - M, y + 19.5, { align: 'right' })
-  }
-  doc.text(`Status: ${clean(quotation.status)}`, PAGE_W - M, quotation.validUntil ? y + 24 : y + 19.5, {
-    align: 'right',
-  })
-
-  const headerBottom = Math.max(cy, quotation.validUntil ? y + 26 : y + 22)
-  doc.setDrawColor(...LINE)
-  doc.setLineWidth(0.4)
-  doc.line(M, headerBottom, PAGE_W - M, headerBottom)
-  y = headerBottom + 6
-
-  // Bill to
-  y = sectionTitle(doc, 'Quotation To', y)
-  const custRows: [string, string][] = [
-    ['Name', customer.name],
-    ['Customer ID', customer.code],
-    ['Phone', [customer.phone, customer.altPhone].filter(Boolean).join(' / ')],
-    ['Email', customer.email ?? ''],
-    ['Address', [customer.address, customer.city].filter(Boolean).join(', ')],
-  ]
-  if (customer.gstNumber) custRows.push(['GST Number', customer.gstNumber])
-  y = infoPanel(doc, y, custRows)
-
-  // Items
-  y = pageBreakIfNeeded(doc, y, 55)
-  y = sectionTitle(doc, 'Items', y)
-  const rows = quotation.items.map((it, i) => [
-    String(i + 1),
-    clean(it.name),
-    String(it.quantity),
-    formatAmount(it.unitPrice),
-    formatAmount(it.amount),
-  ])
-  autoTable(doc, {
-    startY: y,
-    head: [['#', 'Description', 'Qty', 'Rate', 'Amount']],
-    body: rows,
-    theme: 'grid',
-    margin: { left: M, right: M },
-    styles: { font: 'helvetica', fontSize: 8.6, cellPadding: 2.6, textColor: INK, lineColor: LINE, lineWidth: 0.15 },
-    headStyles: { fillColor: BRAND, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.4 },
-    alternateRowStyles: { fillColor: [250, 251, 252] },
-    columnStyles: {
-      0: { cellWidth: 10, halign: 'center' },
-      1: { cellWidth: 'auto' },
-      2: { cellWidth: 14, halign: 'center' },
-      3: { cellWidth: 28, halign: 'right' },
-      4: { cellWidth: 30, halign: 'right' },
-    },
-  })
-  // @ts-expect-error - lastAutoTable is added by jspdf-autotable at runtime
-  y = (doc.lastAutoTable?.finalY ?? y) + 6
-
-  // Totals
-  const summary: [string, string][] = [
-    ['Subtotal', money(quotation.subtotal)],
-    ['Discount', quotation.discount > 0 ? `- ${money(quotation.discount)}` : money(0)],
-    [`Tax / GST (${quotation.taxPercent}%)`, money(quotation.taxAmount)],
-  ]
-  const boxW = 82
-  const boxX = PAGE_W - M - boxW
-  const rowH = 5.8
-  const boxH = summary.length * rowH + 9
-
-  doc.setFillColor(...LIGHT)
-  doc.setDrawColor(...LINE)
-  doc.setLineWidth(0.25)
-  doc.roundedRect(boxX, y, boxW, boxH, 1.6, 1.6, 'FD')
-
-  let ty = y + 6
-  summary.forEach(([label, value]) => {
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.6)
-    doc.setTextColor(...MUTED)
-    doc.text(clean(label), boxX + 3, ty)
-    doc.setTextColor(...INK)
-    doc.text(clean(value), boxX + boxW - 3, ty, { align: 'right' })
-    ty += rowH
-  })
-  doc.setDrawColor(...LINE)
-  doc.setLineWidth(0.25)
-  doc.line(boxX + 3, ty - 3.2, boxX + boxW - 3, ty - 3.2)
+  // Document Title at the very top
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10)
-  doc.setTextColor(...BRAND)
-  doc.text('Grand Total', boxX + 3, ty + 1.2)
-  doc.text(money(quotation.totalAmount), boxX + boxW - 3, ty + 1.2, { align: 'right' })
+  doc.setTextColor(...INK)
+  doc.text('Purchase Order', PAGE_W / 2, 7.5, { align: 'center' })
 
-  y += boxH + 6
+  const topY = 9.5
+  const outerH = 277 // Height of main bordered card
+  const bottomY = topY + outerH
 
-  // Notes / terms
-  if (quotation.notes?.trim()) {
-    y = pageBreakIfNeeded(doc, y, 25)
-    y = textBlock(doc, y, 'Notes', quotation.notes)
-  }
-  if (settings.terms?.trim()) {
-    y = pageBreakIfNeeded(doc, y, 30)
-    y = sectionTitle(doc, 'Terms & Conditions', y)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7.6)
-    doc.setTextColor(...MUTED)
-    const lines = settings.terms
-      .split('\n')
-      .flatMap((line) => doc.splitTextToSize(clean(line), CONTENT_W) as string[])
-    doc.text(lines, M, y)
-    y += lines.length * 3.3 + 6
-  }
-
-  // Signatures
-  y = pageBreakIfNeeded(doc, y, 26)
+  // Outer border box
   doc.setDrawColor(...LINE)
-  doc.setLineWidth(0.3)
-  doc.line(M, y + 10, M + 55, y + 10)
-  doc.line(PAGE_W - M - 55, y + 10, PAGE_W - M, y + 10)
+  doc.setLineWidth(0.28)
+  doc.rect(M, topY, CONTENT_W, outerH, 'S')
+
+  const splitX = M + 95 // Vertical divider between Left (Company) and Right (Voucher details)
+
+  // 1. Top Header Box: Company info left, Voucher info right
+  const headerH = 43
+  doc.line(M, topY + headerH, M + CONTENT_W, topY + headerH)
+  doc.line(splitX, topY, splitX, topY + headerH)
+
+  // Company logo
+  const logo = resolveLogo(settings)
+  const logoW = 24
+  const logoH = 20
+  if (logo) {
+    try {
+      doc.addImage(logo.data, logo.format, M + 2.5, topY + 3, logoW, logoH, undefined, 'FAST')
+    } catch {
+      // ignore
+    }
+  }
+
+  // Company details left
+  const compX = M + logoW + 5
+  let cy = topY + 5.5
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11.5)
+  doc.setTextColor(...INK)
+  doc.text(clean(settings.name || 'TECHCITY TECHNOLOGY'), compX, cy)
+
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7.8)
-  doc.setTextColor(...MUTED)
-  doc.text('Customer Acceptance (Sign & Date)', M, y + 14)
-  doc.text(`For ${clean(settings.name)}`, PAGE_W - M, y + 14, { align: 'right' })
+  doc.setFontSize(7.2)
+  doc.setTextColor(60, 60, 60)
+  cy += 4
 
-  return doc
-}
-
-/* ------------------------------------------------------------------ */
-/* Modern documents (invoice / receipt / history)                      */
-/* ------------------------------------------------------------------ */
-
-function buildModernDocument(input: DocInput): jsPDF {
-  const { service, customer, parts, settings, kind } = input
-  const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true })
-  doc.setProperties({
-    title: `${TITLES[kind]} ${docTitle(kind, service, settings)}`,
-    subject: `${service.serviceType} - ${customer.name}`,
-    author: settings.name,
-    creator: settings.name,
-  })
-
-  let y = drawHeader(doc, input)
-
-  /* Customer + service summary */
-  y = sectionTitle(doc, kind === 'invoice' ? 'Bill To' : 'Customer Details', y)
-  const customerRows: [string, string][] = [
-    ['Name', customer.name],
-    ['Customer ID', customer.code],
-    ['Phone', [customer.phone, customer.altPhone].filter(Boolean).join(' / ')],
-    ['Email', customer.email ?? ''],
+  const addressLines = [
+    clean(settings.address || '#180 E, S.N.G. NAGAR'),
+    'AMMAPALAYAM, TIRUPUR',
+    'Tamil Nadu - 641 652, India',
+    `Contact: ${clean(settings.phone || '99423 52999')}`,
+    `E-Mail: ${clean(settings.email || 'techcitytup@gmail.com')}`,
   ]
-  if (customer.gstNumber) customerRows.push(['GST Number', customer.gstNumber])
-  customerRows.push(['Address', [customer.address, customer.city].filter(Boolean).join(', ')])
-  customerRows.push(['Pincode', customer.pincode ?? ''])
-  y = infoPanel(doc, y, customerRows)
+  for (const line of addressLines) {
+    doc.text(line, compX, cy)
+    cy += 3.3
+  }
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7.5)
+  doc.text(`GSTIN/UIN: ${clean(settings.gstNumber || '33ATNPN0599F1ZF')}`, compX, cy)
 
-  y = pageBreakIfNeeded(doc, y, 45)
-  y = sectionTitle(doc, 'Service Details', y)
-  y = infoPanel(doc, y, [
-    ['Service ID', service.code],
-    ['Service Date', formatDateLong(service.serviceDate)],
-    ['Service Type', service.serviceType],
-    ['Status', service.status],
-    ['Service Mode', service.serviceMode],
-    ['Device / Product', service.product ?? ''],
-    ['Brand', service.brand ?? ''],
-    ['Model', service.model ?? ''],
-    ['Serial Number', service.serialNumber ?? ''],
-    ['Technician', service.technician ?? ''],
+  // Voucher details right
+  const rightMidY = topY + 12
+  doc.line(splitX, rightMidY, M + CONTENT_W, rightMidY)
+
+  const vSplitX = splitX + 46
+  doc.line(vSplitX, topY, vSplitX, rightMidY)
+
+  // Voucher No.
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  doc.setTextColor(70, 70, 70)
+  doc.text('Voucher No.:', splitX + 2, topY + 4)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8.5)
+  doc.setTextColor(...INK)
+  doc.text(clean(quotation.code || '4'), splitX + 2, topY + 8.5)
+
+  // Dated
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  doc.setTextColor(70, 70, 70)
+  doc.text('Dated:', vSplitX + 2, topY + 4)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8.5)
+  doc.setTextColor(...INK)
+  doc.text(formatDateShort(quotation.date), vSplitX + 2, topY + 8.5)
+
+  // Mode/Terms of Payment
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  doc.setTextColor(70, 70, 70)
+  doc.text('Mode/Terms of Payment:', splitX + 2, rightMidY + 4.5)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.setTextColor(...INK)
+  doc.text(clean(quotation.notes || '100% advance'), splitX + 2, rightMidY + 9.5)
+
+  // 2. Buyer (Bill to) section
+  const buyerH = 34
+  const buyerY = topY + headerH
+  doc.line(M, buyerY + buyerH, M + CONTENT_W, buyerY + buyerH)
+  doc.line(splitX, buyerY, splitX, buyerY + buyerH)
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.setTextColor(50, 50, 50)
+  doc.text('Buyer (Bill to)', M + 2, buyerY + 4.5)
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8.8)
+  doc.setTextColor(...INK)
+  doc.text(clean(customer.name), M + 2, buyerY + 9)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  let custY = buyerY + 13
+  const cAddress = [customer.address, customer.city, customer.pincode].filter(Boolean).join(', ')
+  const wrappedAddress = doc.splitTextToSize(clean(cAddress), splitX - M - 4) as string[]
+  for (const al of wrappedAddress.slice(0, 3)) {
+    doc.text(al, M + 2, custY)
+    custY += 3.4
+  }
+  doc.text(`GSTIN/UIN: ${clean(customer.gstNumber || '33BKKPS4037G1Z3')}`, M + 2, buyerY + 28)
+  doc.text('State Name: Tamil Nadu Code: 33', M + 2, buyerY + 31.8)
+
+  // 3. Items Table
+  const tableStartY = buyerY + buyerH
+  const taxPct = quotation.taxPercent || 18
+  const halfTaxPct = taxPct / 2
+
+  const tableBody: (string | number)[][] = quotation.items.map((it, idx) => [
+    String(idx + 1),
+    clean(it.name),
+    `${taxPct} %`,
+    `${it.quantity} NOS`,
+    formatAmount(it.unitPrice),
+    'NOS',
+    '',
+    '',
+    formatAmount(it.amount),
   ])
 
-  if (kind !== 'receipt') {
-    y = pageBreakIfNeeded(doc, y, 30)
-    y = textBlock(doc, y, 'Complaint / Problem Reported', service.complaint)
-    y = pageBreakIfNeeded(doc, y, 25)
-    y = textBlock(doc, y, 'Diagnosis', service.diagnosis)
-    y = pageBreakIfNeeded(doc, y, 25)
-    y = textBlock(doc, y, 'Work Performed', service.workPerformed)
-    y += 1
-  }
+  // Subtotal & taxes
+  const subtotal = quotation.subtotal || quotation.items.reduce((s, it) => s + it.amount, 0)
+  const cgstAmount = Math.round(subtotal * (halfTaxPct / 100) * 100) / 100
+  const sgstAmount = Math.round(subtotal * (halfTaxPct / 100) * 100) / 100
+  const totalWithTax = subtotal + cgstAmount + sgstAmount
+  const roundOff = Math.round((quotation.totalAmount - totalWithTax) * 100) / 100
 
-  /* Parts / charges table */
-  y = pageBreakIfNeeded(doc, y, 50)
-  y = sectionTitle(doc, kind === 'invoice' ? 'Items & Charges' : 'Parts Replaced & Charges', y)
-
-  const body: (string | number)[][] = []
-  parts.forEach((p, i) => {
-    body.push([
-      String(i + 1),
-      clean(p.name),
-      String(p.quantity),
-      formatAmount(p.unitPrice),
-      formatAmount(p.total),
-    ])
-  })
-
-  const partsListed = parts.reduce((s, p) => s + p.total, 0)
-  // If parts cost was entered without itemised rows, show a single summary line.
-  if (!parts.length && service.partsCost > 0) {
-    body.push([String(body.length + 1), 'Parts / materials used', '1', formatAmount(service.partsCost), formatAmount(service.partsCost)])
-  } else if (parts.length && Math.abs(partsListed - service.partsCost) > 0.5) {
-    body.push([
-      String(body.length + 1),
-      'Other parts / materials',
-      '1',
-      formatAmount(service.partsCost - partsListed),
-      formatAmount(service.partsCost - partsListed),
-    ])
-  }
-  if (service.serviceCharge > 0) {
-    body.push([
-      String(body.length + 1),
-      `Service charge - ${clean(service.serviceType)}`,
-      '1',
-      formatAmount(service.serviceCharge),
-      formatAmount(service.serviceCharge),
-    ])
-  }
-  if ((service.deliveryCharge ?? 0) > 0) {
-    body.push([
-      String(body.length + 1),
-      'Delivery / travel charge',
-      '1',
-      formatAmount(service.deliveryCharge ?? 0),
-      formatAmount(service.deliveryCharge ?? 0),
-    ])
-  }
-  if (!body.length) {
-    body.push([String(1), `${clean(service.serviceType)} (no charge)`, '1', '0.00', '0.00'])
+  tableBody.push(['', '', '', '', '', '', '', '', formatAmount(subtotal)])
+  tableBody.push(['', `CENTRAL TAX (CGST ) @ ${halfTaxPct}%`, '', '', '', '', '', '', formatAmount(cgstAmount)])
+  tableBody.push(['', `STATE TAX ( SGST) @ ${halfTaxPct}%`, '', '', '', '', '', '', formatAmount(sgstAmount)])
+  if (roundOff !== 0) {
+    tableBody.push(['', 'ROUND OFF', '', '', '', '', '', '', formatAmount(roundOff)])
   }
 
   autoTable(doc, {
-    startY: y,
-    head: [['#', 'Description', 'Qty', 'Rate', 'Amount']],
-    body,
-    theme: 'grid',
+    startY: tableStartY,
+    head: [
+      ['Sl\nNo.', 'Description of Goods', 'GST\nRate', 'Quantity', 'Rate', 'per', 'Disc. %', 'Disc Amt', 'Amount'],
+    ],
+    body: tableBody,
+    theme: 'plain',
     margin: { left: M, right: M },
     styles: {
       font: 'helvetica',
-      fontSize: 8.6,
-      cellPadding: { top: 2.2, bottom: 2.2, left: 2.5, right: 2.5 },
+      fontSize: 7.8,
+      cellPadding: { top: 1.5, bottom: 1.5, left: 1.5, right: 1.5 },
       textColor: INK,
       lineColor: LINE,
       lineWidth: 0.15,
     },
     headStyles: {
-      fillColor: BRAND,
-      textColor: [255, 255, 255],
+      textColor: INK,
       fontStyle: 'bold',
-      fontSize: 8.4,
-      halign: 'left',
+      fontSize: 7.8,
+      halign: 'center',
+      valign: 'middle',
+      lineColor: LINE,
+      lineWidth: 0.25,
     },
-    alternateRowStyles: { fillColor: [250, 251, 252] },
     columnStyles: {
-      0: { cellWidth: 9, halign: 'center' },
-      1: { cellWidth: 'auto' },
-      2: { cellWidth: 14, halign: 'center' },
-      3: { cellWidth: 26, halign: 'right' },
-      4: { cellWidth: 28, halign: 'right' },
+      0: { cellWidth: 10, halign: 'center' },
+      1: { cellWidth: 'auto', halign: 'left' },
+      2: { cellWidth: 15, halign: 'center' },
+      3: { cellWidth: 20, halign: 'center' },
+      4: { cellWidth: 18, halign: 'right' },
+      5: { cellWidth: 12, halign: 'center' },
+      6: { cellWidth: 12, halign: 'center' },
+      7: { cellWidth: 16, halign: 'right' },
+      8: { cellWidth: 24, halign: 'right' },
     },
   })
 
-  // @ts-expect-error - lastAutoTable is added by jspdf-autotable at runtime
-  y = (doc.lastAutoTable?.finalY ?? y) + 6
-
-  /* Financial summary */
-  y = pageBreakIfNeeded(doc, y, 55)
-  const gross = service.serviceCharge + service.partsCost + (service.deliveryCharge ?? 0)
-  const subtotal = Math.max(0, gross - service.discount)
-  const taxAmount = Math.round(subtotal * ((service.taxPercent || 0) / 100) * 100) / 100
-
-  const summary: [string, string, boolean?][] = [
-    ['Service Charge', money(service.serviceCharge)],
-    ['Parts Cost', money(service.partsCost)],
-  ]
-  if ((service.deliveryCharge ?? 0) > 0)
-    summary.push(['Delivery / Travel', money(service.deliveryCharge ?? 0)])
-  if (service.discount > 0) summary.push(['Discount', `- ${money(service.discount)}`])
-  if (settings.gstEnabled && (service.taxPercent || 0) > 0) {
-    summary.push(['Subtotal', money(subtotal)])
-    summary.push([`Tax / GST (${service.taxPercent}%)`, money(taxAmount)])
-  }
-  summary.push(['Total Amount', money(service.totalAmount), true])
-  summary.push(['Amount Paid', money(service.amountPaid)])
-  summary.push(['Balance Due', money(service.balance), true])
-
-  const boxW = 82
-  const boxX = PAGE_W - M - boxW
-  const rowH = 5.6
-  const boxH = summary.length * rowH + 4
-
-  doc.setFillColor(...LIGHT)
+  // Table bottom border line & Total row
+  // Horizontal line for Total
+  const totalRowY = bottomY - 30
   doc.setDrawColor(...LINE)
   doc.setLineWidth(0.25)
-  doc.roundedRect(boxX, y, boxW, boxH, 1.6, 1.6, 'FD')
+  doc.line(M, totalRowY, M + CONTENT_W, totalRowY)
+  doc.line(M, totalRowY + 6, M + CONTENT_W, totalRowY + 6)
 
-  summary.forEach((row, i) => {
-    const ty = y + 6 + i * rowH - 1.2
-    const emphasise = Boolean(row[2])
-    if (emphasise) {
-      doc.setDrawColor(...LINE)
-      doc.setLineWidth(0.2)
-      doc.line(boxX + 2.5, ty - 3.8, boxX + boxW - 2.5, ty - 3.8)
-    }
-    doc.setFont('helvetica', emphasise ? 'bold' : 'normal')
-    doc.setFontSize(emphasise ? 9.2 : 8.6)
-    doc.setTextColor(...(emphasise ? INK : MUTED))
-    doc.text(clean(row[0]), boxX + 3, ty)
-    doc.setTextColor(...INK)
-    doc.text(clean(row[1]), boxX + boxW - 3, ty, { align: 'right' })
-  })
-
-  // Payment status stamp + method on the left of the summary box
-  const stampY = y + 2
-  const paid = service.paymentStatus === 'Paid'
-  const stampColor: [number, number, number] = paid
-    ? [16, 133, 90]
-    : service.paymentStatus === 'Partially Paid'
-      ? [180, 120, 10]
-      : [190, 45, 45]
-  doc.setDrawColor(...stampColor)
-  doc.setLineWidth(0.7)
-  doc.roundedRect(M, stampY, 46, 12, 2, 2, 'S')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.setTextColor(...stampColor)
-  doc.text(service.paymentStatus.toUpperCase(), M + 23, stampY + 7.6, { align: 'center' })
+  doc.setFontSize(8.5)
+  doc.text('Total', splitX - 15, totalRowY + 4.2)
+  doc.text(`Rs. ${formatAmount(quotation.totalAmount)}`, M + CONTENT_W - 3, totalRowY + 4.2, { align: 'right' })
 
-  if (service.paymentMethod) {
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.2)
-    doc.setTextColor(...MUTED)
-    doc.text(`Payment Method: ${clean(service.paymentMethod)}`, M, stampY + 18)
-  }
-
-  y = y + boxH + 6
-
-  /* Payment history (receipts / partially paid invoices) */
-  const payments = input.payments ?? []
-  if (payments.length > 1 || kind === 'receipt') {
-    if (payments.length) {
-      y = pageBreakIfNeeded(doc, y, 40)
-      y = sectionTitle(doc, 'Payment History', y)
-      autoTable(doc, {
-        startY: y,
-        head: [['Date', 'Method', 'Note', 'Amount']],
-        body: payments.map((p) => [
-          formatDateShort(p.date),
-          clean(p.method),
-          clean(p.note ?? ''),
-          formatAmount(p.amount),
-        ]),
-        theme: 'grid',
-        margin: { left: M, right: M },
-        styles: { font: 'helvetica', fontSize: 8.4, cellPadding: 2, textColor: INK, lineColor: LINE, lineWidth: 0.15 },
-        headStyles: { fillColor: [235, 238, 243], textColor: INK, fontStyle: 'bold', fontSize: 8.2 },
-        columnStyles: { 0: { cellWidth: 28 }, 1: { cellWidth: 30 }, 3: { cellWidth: 30, halign: 'right' } },
-      })
-      // @ts-expect-error - runtime property
-      y = (doc.lastAutoTable?.finalY ?? y) + 6
-    }
-  }
-
-  /* Warranty + next service */
-  if (kind !== 'receipt') {
-    const warrantyRows: [string, string][] = [
-      ['Warranty Period', service.warrantyPeriod ?? 'Not applicable'],
-      ['Warranty Expiry', service.warrantyExpiry ? formatDateLong(service.warrantyExpiry) : 'Not applicable'],
-      ['Next Service Due', service.nextServiceDate ? formatDateLong(service.nextServiceDate) : 'Not scheduled'],
-    ]
-    y = pageBreakIfNeeded(doc, y, 30)
-    y = sectionTitle(doc, 'Warranty & Next Service', y)
-    y = infoPanel(doc, y, warrantyRows, 3)
-  }
-
-  if (service.notes?.trim()) {
-    y = pageBreakIfNeeded(doc, y, 25)
-    y = textBlock(doc, y, 'Additional Notes', service.notes)
-  }
-
-  /* Terms */
-  if (settings.terms?.trim()) {
-    y = pageBreakIfNeeded(doc, y, 34)
-    y = sectionTitle(doc, 'Terms & Conditions', y)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7.6)
-    doc.setTextColor(...MUTED)
-    const termLines = settings.terms
-      .split('\n')
-      .flatMap((line) => doc.splitTextToSize(clean(line), CONTENT_W) as string[])
-    doc.text(termLines, M, y)
-    y += termLines.length * 3.3 + 6
-  }
-
-  /* Signatures */
-  y = pageBreakIfNeeded(doc, y, 26)
-  doc.setDrawColor(...LINE)
-  doc.setLineWidth(0.3)
-  doc.line(M, y + 12, M + 55, y + 12)
-  doc.line(PAGE_W - M - 55, y + 12, PAGE_W - M, y + 12)
+  // Amount Chargeable in words
+  const wordsY = totalRowY + 10
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7.8)
-  doc.setTextColor(...MUTED)
-  doc.text('Customer Signature', M, y + 16)
-  doc.text(`For ${clean(settings.name)}`, PAGE_W - M, y + 16, { align: 'right' })
+  doc.text(`Amount Chargeable (in words): INR ${numberToWordsIndian(quotation.totalAmount)} Only`, M + 2, wordsY)
+  doc.setFont('helvetica', 'bold')
+  doc.text('E. & O.E', M + CONTENT_W - 3, wordsY, { align: 'right' })
 
-  drawFooter(doc, input)
+  // Declaration & Signature section
+  const declY = totalRowY + 13
+  doc.line(M, declY, M + CONTENT_W, declY)
+  doc.line(splitX + 15, declY, splitX + 15, bottomY)
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7.8)
+  doc.text('Declaration', M + 2, declY + 4)
+  doc.setFont('helvetica', 'normal')
+  const defaultTerms = 'One year product warranty from the date of installation. Payment 100% advance'
+  const rawTerms = settings.terms ? settings.terms.split('\n').slice(0, 2).join(' ') : defaultTerms
+  const termLines = doc.splitTextToSize(`Terms & Conditions. ${clean(rawTerms)}`, splitX + 12) as string[]
+  let ty = declY + 8
+  for (const tl of termLines.slice(0, 2)) {
+    doc.text(tl, M + 2, ty)
+    ty += 3.2
+  }
+
+  // Right signature
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7.8)
+  doc.text(`for ${clean(settings.name || 'TECHCITY TECHNOLOGY')}`, M + CONTENT_W - 3, declY + 5, { align: 'right' })
+  doc.setFont('helvetica', 'normal')
+  doc.text('Authorised Signatory', M + CONTENT_W - 3, bottomY - 3, { align: 'right' })
+
+  // Bottom caption outside box
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  doc.setTextColor(80, 80, 80)
+  doc.text('This is a Computer Generated Quotation', PAGE_W / 2, bottomY + 4.5, { align: 'center' })
+
+  return doc
+}
+
+/* ------------------------------------------------------------------ */
+/* 2. Service / Installation Report (PDF 2 - Authentic Job Card Format)*/
+/* ------------------------------------------------------------------ */
+
+export function buildChallanDocument(input: DocInput): jsPDF {
+  const { service, customer, parts, settings } = input
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true })
+
+  doc.setProperties({
+    title: `SERVICE / INSTALLATION REPORT ${service.code}`,
+    subject: `${service.serviceType} - ${customer.name}`,
+    author: settings.name || 'TECHCITY TECHNOLOGY',
+    creator: settings.name || 'TECHCITY TECHNOLOGY',
+  })
+
+  const topY = 9
+  const outerH = 277
+  const bottomY = topY + outerH
+
+  // Outer border
+  doc.setDrawColor(...LINE)
+  doc.setLineWidth(0.3)
+  doc.rect(M, topY, CONTENT_W, outerH, 'S')
+
+  // Top header box
+  const headerH = 26
+  doc.line(M, topY + headerH, M + CONTENT_W, topY + headerH)
+  const rBadgeX = M + CONTENT_W - 38
+  doc.line(rBadgeX, topY, rBadgeX, topY + headerH)
+
+  // Company logo
+  const logo = resolveLogo(settings)
+  const logoW = 22
+  const logoH = 19
+  if (logo) {
+    try {
+      doc.addImage(logo.data, logo.format, M + 3, topY + 3.5, logoW, logoH, undefined, 'FAST')
+    } catch {
+      // ignore
+    }
+  }
+
+  // Company Details
+  const cTextX = M + logoW + 6
+  let hy = topY + 5.5
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(12)
+  doc.setTextColor(...INK)
+  doc.text(clean(settings.name || 'TECH CITY TECHNOLOGY'), cTextX, hy)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.6)
+  doc.setTextColor(50, 50, 50)
+  hy += 4.5
+  doc.text(clean(settings.address || '#180 E, S.N.G. NAGAR, AMMAPALAYAM, TIRUPUR - 641 652'), cTextX, hy)
+  hy += 3.8
+  doc.text(
+    `Telephone No: ${clean(settings.phone || '99423 52999')}, Website: ${clean(
+      settings.website || 'www.techcity.in',
+    )}, Email Id: ${clean(settings.email || 'techcitytup@gmail.com')}`,
+    cTextX,
+    hy,
+  )
+  hy += 3.8
+  doc.setFont('helvetica', 'bold')
+  doc.text(`GST No: ${clean(settings.gstNumber || '33ATNPN0599F1ZF')}`, cTextX, hy)
+
+  // Right Security Association badge
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(6.5)
+  doc.setTextColor(80, 80, 80)
+  doc.text('ELECTRONIC SECURITY', rBadgeX + 19, topY + 9, { align: 'center' })
+  doc.text('ASSOCIATION OF INDIA', rBadgeX + 19, topY + 12.5, { align: 'center' })
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(6)
+  doc.text('CERTIFIED INSTALLER', rBadgeX + 19, topY + 18, { align: 'center' })
+
+  // Document Title band
+  let cy = topY + headerH
+  doc.setFillColor(245, 245, 245)
+  doc.rect(M, cy, CONTENT_W, 7, 'FD')
+  doc.line(M, cy + 7, M + CONTENT_W, cy + 7)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(10.5)
+  doc.setTextColor(...INK)
+  doc.text('SERVICE / INSTALLATION REPORT', PAGE_W / 2, cy + 5, { align: 'center' })
+  cy += 7
+
+  // Customer info section grid
+  const rowH = 6.2
+  const gridW = CONTENT_W
+
+  // Row 1: S. No. & DATE
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.text('S. No. :', M + 2, cy + 4.2)
+  doc.setFont('helvetica', 'normal')
+  doc.text(clean(service.code), M + 16, cy + 4.2)
+
+  doc.setFont('helvetica', 'bold')
+  doc.text('DATE :', M + gridW - 55, cy + 4.2)
+  doc.setFont('helvetica', 'normal')
+  doc.text(formatDateShort(service.serviceDate), M + gridW - 40, cy + 4.2)
+  cy += rowH
+  doc.line(M, cy, M + CONTENT_W, cy)
+
+  // Row 2: Customer Name
+  doc.setFont('helvetica', 'normal')
+  doc.text('Customer Name :', M + 2, cy + 4.2)
+  doc.setFont('helvetica', 'bold')
+  doc.text(clean(customer.name), M + 32, cy + 4.2)
+  cy += rowH
+  doc.line(M, cy, M + CONTENT_W, cy)
+
+  // Row 3: Address
+  doc.setFont('helvetica', 'normal')
+  doc.text('Address :', M + 2, cy + 4.2)
+  const fullCustAddress = [customer.address, customer.city, customer.pincode].filter(Boolean).join(', ')
+  doc.text(clean(fullCustAddress), M + 32, cy + 4.2)
+  cy += rowH
+  doc.line(M, cy, M + CONTENT_W, cy)
+
+  // Row 4: Contact Person
+  doc.setFont('helvetica', 'normal')
+  doc.text('Contact Person :', M + 2, cy + 4.2)
+  doc.text('—', M + 32, cy + 4.2)
+  cy += rowH
+  doc.line(M, cy, M + CONTENT_W, cy)
+
+  // Row 5: Landline / Mobile No
+  doc.setFont('helvetica', 'normal')
+  doc.text('Landline / Mobile No :', M + 2, cy + 4.2)
+  doc.setFont('helvetica', 'bold')
+  const phones = [customer.phone, customer.altPhone].filter(Boolean).join(' / ')
+  doc.text(clean(phones), M + 36, cy + 4.2)
+  cy += rowH
+  doc.line(M, cy, M + CONTENT_W, cy)
+
+  // Service Type checkboxes
+  const sType = service.serviceType.toLowerCase()
+  const isInstall = /install/i.test(sType)
+  const isWarranty = /warrant/i.test(sType)
+  const isAmc = /amc/i.test(sType)
+  const isOnCall = !isInstall && !isWarranty && !isAmc
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.text('Service Type :', M + 2, cy + 4.5)
+  let bx = M + 32
+  bx = drawCheckbox(doc, bx, cy + 4.5, 'New Installation', isInstall)
+  bx = drawCheckbox(doc, bx, cy + 4.5, 'Warranty', isWarranty)
+  bx = drawCheckbox(doc, bx, cy + 4.5, 'AMC', isAmc)
+  drawCheckbox(doc, bx, cy + 4.5, 'On Call Charges', isOnCall)
+  cy += rowH + 1
+  doc.line(M, cy, M + CONTENT_W, cy)
+
+  // Equipment Type checkboxes
+  const prodLower = (service.product || '').toLowerCase()
+  const isCctv = /cctv|camera|dvr|nvr/i.test(prodLower)
+  const isAccess = /access|biometric|rfid/i.test(prodLower)
+  const isAlarm = /alarm|sensor/i.test(prodLower)
+  const isFire = /fire/i.test(prodLower)
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.text('Equipment Type :', M + 2, cy + 4.5)
+  let eqX = M + 32
+  eqX = drawCheckbox(doc, eqX, cy + 4.5, 'Intrusion Alarm', isAlarm)
+  eqX = drawCheckbox(doc, eqX, cy + 4.5, 'CCTV Analog / IP', isCctv)
+  eqX = drawCheckbox(doc, eqX, cy + 4.5, 'Access Control', isAccess)
+  cy += rowH
+  let eqX2 = M + 32
+  eqX2 = drawCheckbox(doc, eqX2, cy + 3.5, 'Time Attendance', false)
+  eqX2 = drawCheckbox(doc, eqX2, cy + 3.5, 'Fire Alarm', isFire)
+  doc.setFont('helvetica', 'normal')
+  doc.text(`Others : ${clean(service.product || 'Desktop / Laptop')}`, eqX2 + 4, cy + 3.5)
+  cy += rowH
+  doc.line(M, cy, M + CONTENT_W, cy)
+
+  // Section Table: Installation / Service Product Information
+  doc.setFillColor(245, 245, 245)
+  doc.rect(M, cy, CONTENT_W, 6, 'FD')
+  doc.line(M, cy + 6, M + CONTENT_W, cy + 6)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.text('Installation / Service Product Information', PAGE_W / 2, cy + 4.2, { align: 'center' })
+  cy += 6
+
+  const prodRows: (string | number)[][] = []
+  if (service.product || service.brand) {
+    const brandModel = [service.brand, service.model].filter(Boolean).join(' ')
+    const snText = service.serialNumber ? ` (SN: ${service.serialNumber})` : ''
+    prodRows.push([
+      '1',
+      clean(`${service.product || 'Equipment'} ${brandModel}${snText}`),
+      '1 NOS',
+    ])
+  }
+  parts.forEach((p) => {
+    prodRows.push([
+      String(prodRows.length + 1),
+      clean(p.name),
+      `${p.quantity} NOS`,
+    ])
+  })
+  if (!prodRows.length) {
+    prodRows.push(['1', `${clean(service.serviceType)} — Standard Service`, '1 NOS'])
+  }
+
+  autoTable(doc, {
+    startY: cy,
+    head: [['S No.', 'PRODUCT DESCRIPTION', 'Qty.']],
+    body: prodRows,
+    theme: 'plain',
+    margin: { left: M, right: M },
+    styles: {
+      font: 'helvetica',
+      fontSize: 7.8,
+      cellPadding: 1.8,
+      textColor: INK,
+      lineColor: LINE,
+      lineWidth: 0.2,
+    },
+    headStyles: {
+      textColor: INK,
+      fontStyle: 'bold',
+      fontSize: 7.8,
+      lineColor: LINE,
+      lineWidth: 0.2,
+    },
+    columnStyles: {
+      0: { cellWidth: 14, halign: 'center' },
+      1: { cellWidth: 'auto', halign: 'left' },
+      2: { cellWidth: 24, halign: 'center' },
+    },
+  })
+
+  // @ts-expect-error - runtime property
+  cy = doc.lastAutoTable?.finalY ?? (cy + 25)
+  doc.line(M, cy, M + CONTENT_W, cy)
+
+  // Inspection rows
+  function drawPlainFieldRow(label: string, value: string, height = 6.2) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7.8)
+    doc.text(label, M + 2, cy + 4.2)
+    if (value) {
+      doc.setFont('helvetica', 'bold')
+      doc.text(clean(value), M + 65, cy + 4.2)
+    }
+    cy += height
+    doc.line(M, cy, M + CONTENT_W, cy)
+  }
+
+  drawPlainFieldRow('Wiring Measurement in Mtrs :', '')
+  drawPlainFieldRow('Person got Trained (Name, Designation, Contact No) :', '')
+
+  // Whether Product replaced
+  const replaced = parts.length > 0
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.8)
+  doc.text('Whether Product replaced :', M + 2, cy + 4.2)
+  let rX = M + 50
+  rX = drawCheckbox(doc, rX, cy + 4.2, 'Yes', replaced)
+  rX = drawCheckbox(doc, rX, cy + 4.2, 'No', !replaced)
+  doc.text(`Specify : ${parts.map((p) => clean(p.name)).join(', ') || '—'}`, rX + 4, cy + 4.2)
+  cy += rowH
+  doc.line(M, cy, M + CONTENT_W, cy)
+
+  drawPlainFieldRow('Nature of Complaint :', service.complaint)
+  const actionTaken = [service.diagnosis, service.workPerformed].filter(Boolean).join(' • ')
+  drawPlainFieldRow('Action Taken :', actionTaken || 'Checked and resolved successfully.')
+  drawPlainFieldRow('Customer Remarks / Feed Back :', service.notes || 'Satisfied with service.')
+
+  // WORK COMPLETION CERTIFICATE
+  doc.setFillColor(245, 245, 245)
+  doc.rect(M, cy, CONTENT_W, 6, 'FD')
+  doc.line(M, cy + 6, M + CONTENT_W, cy + 6)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.text('WORK COMPLETION CERTIFICATE', PAGE_W / 2, cy + 4.2, { align: 'center' })
+  cy += 6
+
+  // Certificate text
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  const certText = `It is to Certify that the Installation of "${clean(
+    service.product || 'Equipment',
+  )}" for "${clean(customer.name)}" has been successfully completed on ${formatDateShort(service.serviceDate)}.`
+  doc.text(certText, M + 2, cy + 4.5)
+  cy += 7.5
+  doc.line(M, cy, M + CONTENT_W, cy)
+
+  // Commencement and completion dates
+  doc.text(`Installation Commenced Date: ${formatDateShort(service.serviceDate)}`, M + 2, cy + 4.5)
+  doc.text(`Completed Date: ${formatDateShort(service.finishedDate || service.serviceDate)}`, M + 105, cy + 4.5)
+  cy += 7.5
+  doc.line(M, cy, M + CONTENT_W, cy)
+
+  // TIME IN / TIME ON
+  doc.text('TIME IN : 10:00 AM', M + 2, cy + 4.5)
+  doc.text('TIME ON : 05:00 PM', M + 105, cy + 4.5)
+  cy += 7.5
+  doc.line(M, cy, M + CONTENT_W, cy)
+
+  // Signatures
+  doc.line(M + 95, cy, M + 95, bottomY)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.8)
+  doc.text('Customer Representative Sign', M + 2, cy + 5)
+  doc.text('Company Seal and Date', M + 2, bottomY - 3)
+
+  const techName = service.technician ? ` (${clean(service.technician)})` : ''
+  doc.text(clean(settings.name || 'TECH CITY TECHNOLOGY'), M + 98, cy + 5)
+  doc.text(`Service Engineer Sign${techName}`, M + 98, bottomY - 3)
+
+  return doc
+}
+
+/* ------------------------------------------------------------------ */
+/* 3. Tax Invoice (PDF 3 - Tally ERP Style Format)                     */
+/* ------------------------------------------------------------------ */
+
+export function buildInvoiceDocument(input: DocInput): jsPDF {
+  const { service, customer, parts, settings } = input
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true })
+
+  const invNumber = docTitle('invoice', service, settings)
+  doc.setProperties({
+    title: `TAX INVOICE ${invNumber}`,
+    subject: `Invoice for ${customer.name}`,
+    author: settings.name || 'TECHCITY TECHNOLOGY',
+    creator: settings.name || 'TECHCITY TECHNOLOGY',
+  })
+
+  // Title outside box
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(...INK)
+  doc.text('TAX INVOICE', PAGE_W / 2, 7.5, { align: 'center' })
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  doc.text('(ORIGINAL FOR RECIPIENT)', M + CONTENT_W, 7.5, { align: 'right' })
+
+  const topY = 9.5
+  const outerH = 277
+  const bottomY = topY + outerH
+
+  // Outer border box
+  doc.setDrawColor(...LINE)
+  doc.setLineWidth(0.28)
+  doc.rect(M, topY, CONTENT_W, outerH, 'S')
+
+  const splitX = M + 98 // Vertical divider
+
+  // 1. Top Section: Company Left & Metadata Right (7 sub-rows)
+  const headerH = 46
+  doc.line(M, topY + headerH, M + CONTENT_W, topY + headerH)
+  doc.line(splitX, topY, splitX, topY + headerH)
+
+  // Company logo
+  const logo = resolveLogo(settings)
+  const logoW = 22
+  const logoH = 19
+  if (logo) {
+    try {
+      doc.addImage(logo.data, logo.format, M + 2.5, topY + 3.5, logoW, logoH, undefined, 'FAST')
+    } catch {
+      // ignore
+    }
+  }
+
+  // Company Info Left
+  const cTextX = M + logoW + 5
+  let cy = topY + 5.5
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(12)
+  doc.setTextColor(...BRAND_ORANGE)
+  doc.text(clean(settings.name || 'TECHCITY TECHNOLOGY'), cTextX, cy)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.2)
+  doc.setTextColor(50, 50, 50)
+  cy += 4.2
+  const cAddrs = [
+    clean(settings.address || '#180 E, S.N.G. NAGAR'),
+    'AMMAPALAYAM',
+    'TIRUPUR',
+    `Phone: ${clean(settings.phone || '99423 52999')}`,
+  ]
+  for (const a of cAddrs) {
+    doc.text(a, cTextX, cy)
+    cy += 3.2
+  }
+  doc.setFont('helvetica', 'bold')
+  doc.text(`GSTIN: ${clean(settings.gstNumber || '33ATNPN0599F1ZF')}`, cTextX, cy)
+  cy += 3.2
+  doc.setFont('helvetica', 'normal')
+  doc.text('State Name : Tamil Nadu, Code : 33', cTextX, cy)
+  cy += 3.2
+  doc.text(`E-Mail : ${clean(settings.email || 'techcitytup@gmail.com')}`, cTextX, cy)
+
+  // Right Metadata Grid (7 rows, split vertically)
+  const rRowH = headerH / 7
+  const rMidX = splitX + 46
+
+  for (let r = 1; r < 7; r++) {
+    doc.line(splitX, topY + r * rRowH, M + CONTENT_W, topY + r * rRowH)
+  }
+  doc.line(rMidX, topY, rMidX, topY + 6 * rRowH)
+
+  function metaCell(row: number, label1: string, val1: string, label2: string, val2: string) {
+    const ry = topY + row * rRowH
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6.8)
+    doc.setTextColor(70, 70, 70)
+    doc.text(label1, splitX + 2, ry + 2.6)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7.6)
+    doc.setTextColor(...INK)
+    doc.text(clean(val1), splitX + 2, ry + 5.8)
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6.8)
+    doc.setTextColor(70, 70, 70)
+    doc.text(label2, rMidX + 2, ry + 2.6)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7.6)
+    doc.setTextColor(...INK)
+    doc.text(clean(val2), rMidX + 2, ry + 5.8)
+  }
+
+  metaCell(0, 'Invoice No.', invNumber, 'Dated', formatDateShort(service.serviceDate))
+  metaCell(1, 'Delivery Note', '', 'Mode/Terms of Payment', service.paymentMethod || 'Cash')
+  metaCell(2, 'Reference No. & Date.', service.code, 'Other References', '')
+  metaCell(3, "Buyer's Order No.", '', 'Dated', '')
+  metaCell(4, 'Dispatch Doc No.', '', 'Delivery Note Date', '')
+  metaCell(5, 'Dispatched through', service.serviceMode || 'Direct', 'Destination', clean(customer.city || 'Tirupur'))
+
+  // 7th row full width of right column
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(6.8)
+  doc.text('Terms of Delivery', splitX + 2, topY + 6 * rRowH + 2.6)
+  doc.setFont('helvetica', 'bold')
+  doc.text('Delivered in Good Condition', splitX + 2, topY + 6 * rRowH + 5.8)
+
+  // 2. Consignee (Ship to) & Buyer (Bill to) section
+  const buyerH = 34
+  const buyerY = topY + headerH
+  doc.line(M, buyerY + buyerH, M + CONTENT_W, buyerY + buyerH)
+  doc.line(splitX, buyerY, splitX, buyerY + buyerH)
+
+  function drawPartyBlock(x: number, title: string) {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7.5)
+    doc.setTextColor(70, 70, 70)
+    doc.text(title, x + 2, buyerY + 4)
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8.5)
+    doc.setTextColor(...INK)
+    doc.text(clean(customer.name), x + 2, buyerY + 8.5)
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7.2)
+    const addr = [customer.address, customer.city, customer.pincode].filter(Boolean).join(', ')
+    const lines = doc.splitTextToSize(clean(addr), splitX - M - 4) as string[]
+    let py = buyerY + 12.5
+    for (const l of lines.slice(0, 3)) {
+      doc.text(l, x + 2, py)
+      py += 3.2
+    }
+    doc.text(`GSTIN/UIN : ${clean(customer.gstNumber || '33AAIFJ1916C1ZV')}`, x + 2, buyerY + 28)
+    doc.text('State Name : Tamil Nadu, Code : 33', x + 2, buyerY + 31.8)
+  }
+
+  drawPartyBlock(M, 'Consignee (Ship to)')
+  drawPartyBlock(splitX, 'Buyer (Bill to)')
+
+  // 3. Items Table
+  const tableStartY = buyerY + buyerH
+  const taxPct = service.taxPercent || 18
+  const halfTaxPct = taxPct / 2
+
+  const itemsBody: (string | number)[][] = []
+  let totalQuantity = 0
+
+  if (service.product) {
+    const brandModel = [service.brand, service.model].filter(Boolean).join(' ')
+    const itemDesc = `${service.product}${brandModel ? ` (${brandModel})` : ''}`
+    itemsBody.push([
+      '1',
+      clean(itemDesc),
+      '84713010',
+      '1 NOS',
+      formatAmount(service.serviceCharge || service.totalAmount),
+      'NOS',
+      '',
+      formatAmount(service.serviceCharge || service.totalAmount),
+    ])
+    totalQuantity += 1
+  }
+
+  parts.forEach((p) => {
+    totalQuantity += p.quantity
+    itemsBody.push([
+      String(itemsBody.length + 1),
+      clean(p.name),
+      '85235100',
+      `${p.quantity} NOS`,
+      formatAmount(p.unitPrice),
+      'NOS',
+      '',
+      formatAmount(p.total),
+    ])
+  })
+
+  if (!itemsBody.length) {
+    totalQuantity += 1
+    itemsBody.push([
+      '1',
+      clean(service.serviceType),
+      '998719',
+      '1 NOS',
+      formatAmount(service.serviceCharge || service.totalAmount),
+      'NOS',
+      '',
+      formatAmount(service.serviceCharge || service.totalAmount),
+    ])
+  }
+
+  const taxableValue = service.serviceCharge + service.partsCost + (service.deliveryCharge ?? 0) - service.discount
+  const cgst = Math.round(taxableValue * (halfTaxPct / 100) * 100) / 100
+  const sgst = Math.round(taxableValue * (halfTaxPct / 100) * 100) / 100
+  const totalTax = cgst + sgst
+
+  itemsBody.push(['', '', '', '', '', '', '', formatAmount(taxableValue)])
+  itemsBody.push(['', `OUTPUT @ CENTRAL TAX @ ${halfTaxPct}%`, '', '', '', '', `${halfTaxPct} %`, formatAmount(cgst)])
+  itemsBody.push(['', `OUTPUT @ STATE TAX @ ${halfTaxPct}%`, '', '', '', '', `${halfTaxPct} %`, formatAmount(sgst)])
+
+  autoTable(doc, {
+    startY: tableStartY,
+    head: [['Sl\nNo.', 'Description of Goods', 'HSN/SAC', 'Quantity', 'Rate', 'per', 'Disc. %', 'Amount']],
+    body: itemsBody,
+    theme: 'plain',
+    margin: { left: M, right: M },
+    styles: {
+      font: 'helvetica',
+      fontSize: 7.6,
+      cellPadding: 1.6,
+      textColor: INK,
+      lineColor: LINE,
+      lineWidth: 0.15,
+    },
+    headStyles: {
+      textColor: INK,
+      fontStyle: 'bold',
+      fontSize: 7.6,
+      halign: 'center',
+      valign: 'middle',
+      lineColor: LINE,
+      lineWidth: 0.22,
+    },
+    columnStyles: {
+      0: { cellWidth: 10, halign: 'center' },
+      1: { cellWidth: 'auto', halign: 'left' },
+      2: { cellWidth: 20, halign: 'center' },
+      3: { cellWidth: 18, halign: 'center' },
+      4: { cellWidth: 22, halign: 'right' },
+      5: { cellWidth: 14, halign: 'center' },
+      6: { cellWidth: 16, halign: 'center' },
+      7: { cellWidth: 26, halign: 'right' },
+    },
+  })
+
+  // Total Row
+  const totalRowY = bottomY - 62
+  doc.setDrawColor(...LINE)
+  doc.setLineWidth(0.25)
+  doc.line(M, totalRowY, M + CONTENT_W, totalRowY)
+  doc.line(M, totalRowY + 6, M + CONTENT_W, totalRowY + 6)
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8.5)
+  doc.text('Total', splitX - 25, totalRowY + 4.2)
+  doc.text(`${totalQuantity} NOS`, splitX + 5, totalRowY + 4.2)
+  doc.text(`Rs. ${formatAmount(service.totalAmount)}`, M + CONTENT_W - 3, totalRowY + 4.2, { align: 'right' })
+
+  // Amount Chargeable in words
+  const wordsY = totalRowY + 10.5
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.6)
+  doc.text('Amount Chargeable (in words)', M + 2, wordsY - 2.5)
+  doc.setFont('helvetica', 'bold')
+  doc.text(`INR ${numberToWordsIndian(service.totalAmount)} Only`, M + 2, wordsY + 1.5)
+  doc.text('E. & O.E', M + CONTENT_W - 3, wordsY - 1, { align: 'right' })
+
+  // 4. HSN/SAC Tax Summary Table
+  const hsnY = wordsY + 5
+  autoTable(doc, {
+    startY: hsnY,
+    head: [
+      ['HSN/SAC', 'Taxable\nValue', 'CGST\nRate  Amount', 'SGST/UTGST\nRate  Amount', 'Total\nTax Amount'],
+    ],
+    body: [
+      ['84713010', formatAmount(taxableValue), `${halfTaxPct}%  ${formatAmount(cgst)}`, `${halfTaxPct}%  ${formatAmount(sgst)}`, formatAmount(totalTax)],
+      ['Total', formatAmount(taxableValue), formatAmount(cgst), formatAmount(sgst), formatAmount(totalTax)],
+    ],
+    theme: 'plain',
+    margin: { left: M, right: M },
+    styles: {
+      font: 'helvetica',
+      fontSize: 7.2,
+      cellPadding: 1.4,
+      textColor: INK,
+      lineColor: LINE,
+      lineWidth: 0.15,
+    },
+    headStyles: {
+      textColor: INK,
+      fontStyle: 'bold',
+      fontSize: 7.2,
+      halign: 'center',
+      valign: 'middle',
+      lineColor: LINE,
+      lineWidth: 0.2,
+    },
+    columnStyles: {
+      0: { cellWidth: 26, halign: 'center' },
+      1: { cellWidth: 32, halign: 'right' },
+      2: { cellWidth: 44, halign: 'right' },
+      3: { cellWidth: 44, halign: 'right' },
+      4: { cellWidth: 44, halign: 'right' },
+    },
+  })
+
+  // @ts-expect-error - runtime property
+  const hsnEndY = doc.lastAutoTable?.finalY ?? (hsnY + 14)
+  doc.line(M, hsnEndY, M + CONTENT_W, hsnEndY)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.2)
+  doc.text(
+    `Tax Amount (in words) : INR ${numberToWordsIndian(totalTax)} Only (Tax / GST (${taxPct}%))`,
+    M + 2,
+    hsnEndY + 3.8,
+  )
+
+  // 5. Declaration, Bank Details & Signature bottom box
+  const declY = hsnEndY + 6
+  doc.line(M, declY, M + CONTENT_W, declY)
+  const bankX = M + 80
+  const authX = M + 135
+  doc.line(bankX, declY, bankX, bottomY)
+  doc.line(authX, declY, authX, bottomY)
+
+  // Declaration left
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7)
+  doc.text('Declaration', M + 2, declY + 3.5)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(5.8)
+  const declLines = [
+    'We declare that this invoice shows the actual price of the goods',
+    'described and that all particulars are true and correct. NOTE :-',
+    'WARRANTY MUST BE CLAIMED FROM MANUFACTURERS ONLY.',
+  ]
+  if (settings.terms) {
+    const customTerms = doc.splitTextToSize(clean(settings.terms), bankX - M - 4) as string[]
+    declLines.push(...customTerms.slice(0, 2))
+  }
+  let dy = declY + 6.8
+  for (const dl of declLines) {
+    if (dy < bottomY - 6) {
+      doc.text(dl, M + 2, dy)
+      dy += 2.8
+    }
+  }
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(6.8)
+  doc.text("Customer's Seal and Signature", M + 2, bottomY - 2.5)
+
+  // Bank details middle
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7.2)
+  doc.text("Company's Bank Details", bankX + 2, declY + 3.5)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(6.8)
+  doc.text('Bank Name : INDIAN OVERSEAS BANK', bankX + 2, declY + 7.5)
+  doc.text('A/c No. : 340502000005999', bankX + 2, declY + 11)
+  doc.text('Branch & IFS Code : T.M.POONDI & IOBA0003405', bankX + 2, declY + 14.5)
+
+  // Right Signatory & Payment Stamp
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7.5)
+  doc.text(`for ${clean(settings.name || 'TECHCITY TECHNOLOGY')}`, M + CONTENT_W - 3, declY + 4, { align: 'right' })
+
+  // Status Stamp
+  const paidStatus = (service.paymentStatus || 'Paid').toUpperCase()
+  const stampColor: [number, number, number] = paidStatus === 'PAID' ? [16, 133, 90] : [190, 45, 45]
+  doc.setDrawColor(...stampColor)
+  doc.setLineWidth(0.4)
+  doc.rect(authX + 4, declY + 8, 26, 6.5, 'S')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7)
+  doc.setTextColor(...stampColor)
+  doc.text(paidStatus, authX + 17, declY + 12.5, { align: 'center' })
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.2)
+  doc.setTextColor(...INK)
+  doc.text('Authorised Signatory', M + CONTENT_W - 3, bottomY - 3, { align: 'right' })
+
+  // Subfooters outside box
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7)
+  doc.setTextColor(60, 60, 60)
+  doc.text('SUBJECT TO TIRUPUR JURISDICTION', PAGE_W / 2, bottomY + 3.5, { align: 'center' })
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(6.8)
+  doc.text(
+    `This is a Computer Generated Invoice  |  ${clean(
+      settings.footerText || 'Thank you for choosing TECH CITY TECHNOLOGY',
+    )}`,
+    PAGE_W / 2,
+    bottomY + 6.8,
+    { align: 'center' },
+  )
+
   return doc
 }
 
@@ -1077,7 +1137,7 @@ function buildModernDocument(input: DocInput): jsPDF {
 
 export function buildDocument(input: DocInput): jsPDF {
   if (input.kind === 'report') return buildChallanDocument(input)
-  return buildModernDocument(input)
+  return buildInvoiceDocument(input)
 }
 
 export function documentFilename(input: DocInput): string {
@@ -1103,7 +1163,6 @@ export function documentObjectUrl(input: DocInput): string {
   return URL.createObjectURL(documentBlob(input))
 }
 
-/** Opens the browser print dialog with the generated PDF (hidden iframe). */
 export function printDocument(input: DocInput): Promise<void> {
   return new Promise((resolve, reject) => {
     try {
@@ -1141,8 +1200,6 @@ export function pdfFile(input: DocInput): File {
   return new File([documentBlob(input)], documentFilename(input), { type: 'application/pdf' })
 }
 
-/* Quotation output helpers */
-
 export function quotationFilename(input: QuotationDocInput): string {
   const safeName = input.customer.name.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '')
   return `Quotation-${input.quotation.code}-${safeName}.pdf`
@@ -1160,11 +1217,6 @@ export function quotationObjectUrl(input: QuotationDocInput): string {
   return URL.createObjectURL(quotationBlob(input))
 }
 
-/**
- * Shares the generated PDF through the OS share sheet (Web Share API).
- * Lives here rather than in share.ts so the heavy jsPDF bundle stays in this
- * lazily-loaded chunk. Returns 'unsupported' when the browser cannot share files.
- */
 export async function sharePDFDocument(
   input: DocInput,
   text: string,
