@@ -98,7 +98,7 @@ export default function PaymentsPage() {
         subtitle="Track outstanding balances and every payment received."
         actions={
           <button className="btn-secondary" onClick={onExport} disabled={!payments?.length}>
-            <Download size={16} /> <span className="hidden sm:inline">Export CSV</span>
+            <Download size={16} /> <span className="sr-only sm:not-sr-only">Export CSV</span>
           </button>
         }
       />
@@ -189,7 +189,7 @@ export default function PaymentsPage() {
           />
         ) : tab === 'pending' ? (
           <>
-            <ul className="divide-y divide-ink-100">
+            <ul className="divide-y divide-line-soft">
               {pendingPage.slice.map((s) => {
                 const c = customerMap.get(s.customerId)
                 return (
@@ -243,7 +243,7 @@ export default function PaymentsPage() {
           <>
             <div className="hidden overflow-x-auto sm:block">
               <table className="w-full">
-                <thead className="border-b border-ink-200 bg-ink-50/60">
+                <thead>
                   <tr>
                     <th className="table-th">Date</th>
                     <th className="table-th">Customer</th>
@@ -252,14 +252,14 @@ export default function PaymentsPage() {
                     <th className="table-th text-right">Amount</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-ink-100">
+                <tbody className="divide-y divide-line-soft">
                   {txPage.slice.map((payment) => {
                     const s = serviceMap.get(payment.serviceId)
                     return (
                       <tr
                         key={payment.id}
                         onClick={() => s && navigate(`/services/${s.id}`)}
-                        className="cursor-pointer transition-colors hover:bg-ink-50"
+                        className="table-row-link"
                       >
                         <td className="table-td whitespace-nowrap">{formatDate(payment.date)}</td>
                         <td className="table-td">
@@ -278,7 +278,7 @@ export default function PaymentsPage() {
                 </tbody>
               </table>
             </div>
-            <ul className="divide-y divide-ink-100 sm:hidden">
+            <ul className="divide-y divide-line-soft sm:hidden">
               {txPage.slice.map((payment) => {
                 const s = serviceMap.get(payment.serviceId)
                 return (

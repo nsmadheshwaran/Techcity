@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Download, HardDrive, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
+import { Download, HardDrive, Pencil, Plus, Trash2 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { EquipmentFormModal } from '@/components/equipment/EquipmentFormModal'
 import { EquipmentBadge } from '@/components/ui/Badges'
 import { EmptyState, SkeletonRows } from '@/components/ui/States'
+import { ListToolbar, SearchInput } from '@/components/ui/ListToolbar'
 import { Pagination } from '@/components/ui/Pagination'
 import { usePagination } from '@/components/ui/usePagination'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
@@ -74,7 +75,7 @@ export default function EquipmentPage() {
         actions={
           <>
             <button className="btn-secondary" onClick={onExport} disabled={!equipment?.length}>
-              <Download size={16} /> <span className="hidden sm:inline">Export CSV</span>
+              <Download size={16} /> <span className="sr-only sm:not-sr-only">Export CSV</span>
             </button>
             <button
               className="btn-primary"
@@ -89,44 +90,36 @@ export default function EquipmentPage() {
         }
       />
 
-      <div className="card mb-4 flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
-          <input
-            className="input pl-9 pr-9"
-            placeholder="Search by customer, product, brand, model or serial number…"
+      <div className="panel">
+        <ListToolbar>
+          <SearchInput
+            className="min-w-0 flex-1"
             value={query}
-            onChange={(e) => {
-              setQuery(e.target.value)
+            onChange={(v) => {
+              setQuery(v)
               setPage(1)
             }}
+            placeholder="Search by customer, product, brand, model or serial number…"
+            ariaLabel="Search equipment"
           />
-          {query && (
-            <button
-              onClick={() => setQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-1 text-ink-400 hover:bg-ink-100"
-              aria-label="Clear search"
-            >
-              <X size={14} />
-            </button>
-          )}
-        </div>
-        <select
-          className="input w-full py-2 sm:w-44"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          aria-label="Filter by status"
-        >
-          <option value="">All statuses</option>
-          {EQUIPMENT_STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-      </div>
+          <select
+            className="input w-full py-1.5 text-[12.5px] font-medium sm:w-44"
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value)
+              setPage(1)
+            }}
+            aria-label="Filter by status"
+          >
+            <option value="">All statuses</option>
+            {EQUIPMENT_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </ListToolbar>
 
-      <div className="card overflow-hidden">
         {!equipment ? (
           <SkeletonRows rows={5} cols={4} />
         ) : filtered.length === 0 ? (
@@ -154,7 +147,7 @@ export default function EquipmentPage() {
           <>
             <div className="hidden overflow-x-auto lg:block">
               <table className="w-full">
-                <thead className="border-b border-ink-200 bg-ink-50/60">
+                <thead>
                   <tr>
                     <th className="table-th">Product</th>
                     <th className="table-th">Customer</th>
@@ -165,7 +158,7 @@ export default function EquipmentPage() {
                     <th className="table-th text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-ink-100">
+                <tbody className="divide-y divide-line-soft">
                   {slice.map((e) => {
                     const c = customerMap.get(e.customerId)
                     const left = daysUntil(e.warrantyExpiry)
@@ -256,7 +249,7 @@ export default function EquipmentPage() {
               </table>
             </div>
 
-            <ul className="divide-y divide-ink-100 lg:hidden">
+            <ul className="divide-y divide-line-soft lg:hidden">
               {slice.map((e) => {
                 const c = customerMap.get(e.customerId)
                 return (

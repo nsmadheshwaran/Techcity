@@ -1,33 +1,58 @@
 @import 'tailwindcss';
 
+/* =====================================================================
+   TECH CITY CRM — design system
+   ---------------------------------------------------------------------
+   The visual language follows mainstream business CRMs (Zoho / Salesforce
+   style): a flat, dense, information-first interface rather than a
+   marketing-page look. The rules that keep it coherent:
+
+     - Flat surfaces. Elevation is used only for things that float
+       (modals, popovers, toasts) - never for cards in the page flow.
+     - Small radii (6px controls, 8px panels). Large pills read "consumer".
+     - Compact type: 13px body in data regions, 11px uppercase headers.
+     - One accent colour. Blue means "interactive"; every other colour is
+       reserved for status meaning (green paid, amber waiting, red due).
+     - Numbers are tabular so money columns align down the page.
+
+   Every class below is a shared token. Restyling the product happens
+   here, not in the 17 page components.
+   ===================================================================== */
+
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial,
     sans-serif;
 
-  /* Brand palette - deep sapphire slate + technology accent */
-  --color-brand-50: #eef4ff;
-  --color-brand-100: #d9e6ff;
-  --color-brand-200: #bcd3ff;
-  --color-brand-300: #8eb6ff;
-  --color-brand-400: #598eff;
-  --color-brand-500: #2563eb;
-  --color-brand-600: #1d4ed8;
-  --color-brand-700: #1e40af;
-  --color-brand-800: #1e3a8a;
-  --color-brand-900: #172554;
-  --color-brand-950: #0f172a;
+  /* Accent - a single enterprise blue. Interactive elements only. */
+  --color-brand-50: #eff6ff;
+  --color-brand-100: #dbeafe;
+  --color-brand-200: #bfdbfe;
+  --color-brand-300: #93c5fd;
+  --color-brand-400: #60a5fa;
+  --color-brand-500: #2f80ed;
+  --color-brand-600: #1a6fd4;
+  --color-brand-700: #1559ab;
+  --color-brand-800: #14498a;
+  --color-brand-900: #143c70;
+  --color-brand-950: #0e2547;
 
+  /* Neutrals - the bulk of the interface. */
   --color-ink-50: #f8fafc;
   --color-ink-100: #f1f5f9;
-  --color-ink-200: #e2e8f0;
-  --color-ink-300: #cbd5e1;
+  --color-ink-200: #e4e8ee;
+  --color-ink-300: #cbd3de;
   --color-ink-400: #94a3b8;
   --color-ink-500: #64748b;
-  --color-ink-600: #475569;
-  --color-ink-700: #334155;
-  --color-ink-800: #1e293b;
-  --color-ink-900: #0f172a;
-  --color-ink-950: #020617;
+  --color-ink-600: #4b5768;
+  --color-ink-700: #374151;
+  --color-ink-800: #1f2937;
+  --color-ink-900: #111827;
+  --color-ink-950: #030712;
+
+  /* Application chrome */
+  --color-canvas: #f4f6f9;
+  --color-line: #e4e8ee;
+  --color-line-soft: #eef1f5;
 }
 
 @layer base {
@@ -38,23 +63,31 @@
     text-rendering: optimizeLegibility;
   }
   body {
-    @apply bg-slate-50/60 text-ink-900 font-sans antialiased;
-    font-feature-settings: 'cv11', 'ss01', 'cv05';
+    @apply bg-canvas text-ink-800 font-sans antialiased text-[13.5px];
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  /* Money and counts line up column-wise. */
+  table,
+  .tabular {
+    font-variant-numeric: tabular-nums;
   }
   * {
     scrollbar-width: thin;
     scrollbar-color: var(--color-ink-300) transparent;
   }
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 10px;
+    height: 10px;
   }
   ::-webkit-scrollbar-thumb {
     background: var(--color-ink-300);
     border-radius: 9999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
   }
   ::-webkit-scrollbar-thumb:hover {
     background: var(--color-ink-400);
+    background-clip: content-box;
   }
   input,
   select,
@@ -65,74 +98,185 @@
     input,
     select,
     textarea {
-      font-size: 14px;
+      font-size: 13.5px;
     }
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
   }
 }
 
 @layer components {
-  /* Premium card elevation */
+  /* ---------------------------------------------------------------
+     Surfaces
+     --------------------------------------------------------------- */
   .card {
-    @apply bg-white border border-slate-200/80 rounded-2xl shadow-[0_1px_3px_0_rgba(15,23,42,0.03),0_1px_2px_-1px_rgba(15,23,42,0.03)];
+    @apply bg-white border border-line rounded-lg;
   }
   .card-interactive {
-    @apply bg-white border border-slate-200/80 rounded-2xl shadow-[0_1px_3px_0_rgba(15,23,42,0.03)]
-      transition-all duration-200 hover:border-slate-300 hover:shadow-[0_8px_20px_-4px_rgba(15,23,42,0.07),0_3px_6px_-2px_rgba(15,23,42,0.04)] hover:-translate-y-0.5;
+    @apply bg-white border border-line rounded-lg transition-colors duration-150
+      hover:border-brand-300 hover:bg-brand-50/25;
   }
+  /* A titled work area - the standard container for a list or a group
+     of related fields. `.panel-header` is its title bar. */
+  .panel {
+    @apply bg-white border border-line rounded-lg overflow-hidden;
+  }
+  .panel-header {
+    @apply flex items-center justify-between gap-3 border-b border-line bg-ink-50/70 px-4 py-2.5;
+  }
+  .panel-title {
+    @apply text-[12px] font-bold uppercase tracking-wider text-ink-600;
+  }
+  /* Small caps label above a group of fields inside a form. */
+  .section-label {
+    @apply text-[11px] font-bold uppercase tracking-[0.07em] text-ink-500;
+  }
+
+  /* ---------------------------------------------------------------
+     Forms
+     --------------------------------------------------------------- */
   .field-label {
-    @apply block text-[12.5px] font-semibold uppercase tracking-wider text-slate-600 mb-1.5;
+    @apply block text-[12px] font-semibold text-ink-600 mb-1;
   }
   .input {
-    @apply w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-slate-900 placeholder:text-slate-400
-      shadow-[0_1px_2px_rgba(0,0,0,0.02)] outline-none transition-all duration-150
-      hover:border-slate-300
-      focus:border-brand-500 focus:ring-3 focus:ring-brand-500/15
-      disabled:bg-slate-100 disabled:text-slate-400;
+    @apply w-full rounded-md border border-ink-300 bg-white px-2.5 py-1.5 text-ink-900
+      placeholder:text-ink-400 outline-none transition-colors duration-100
+      hover:border-ink-400
+      focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20
+      disabled:bg-ink-100 disabled:text-ink-400 disabled:cursor-not-allowed;
   }
   .input-error {
     @apply border-red-400 focus:border-red-500 focus:ring-red-500/20;
   }
+
+  /* ---------------------------------------------------------------
+     Buttons - flat, compact, one accent
+     --------------------------------------------------------------- */
   .btn,
   .btn-primary,
   .btn-secondary,
   .btn-ghost,
   .btn-danger {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium
-      transition-all duration-150 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-semibold
+      transition-colors duration-100 disabled:opacity-45 disabled:pointer-events-none
       whitespace-nowrap select-none cursor-pointer;
   }
   .btn-primary {
-    @apply bg-gradient-to-r from-brand-600 to-indigo-600 text-white hover:from-brand-700 hover:to-indigo-700
-      shadow-[0_2px_6px_rgba(29,78,216,0.25),0_1px_2px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_12px_rgba(29,78,216,0.35)];
+    @apply bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800;
   }
   .btn-secondary {
-    @apply bg-white text-slate-700 border border-slate-200/90 hover:bg-slate-50 hover:border-slate-300
-      shadow-[0_1px_2px_rgba(0,0,0,0.03)];
+    @apply bg-white text-ink-700 border border-ink-300 hover:bg-ink-50 hover:border-ink-400 active:bg-ink-100;
   }
   .btn-ghost {
-    @apply text-slate-600 hover:bg-slate-100 hover:text-slate-900;
+    @apply text-ink-600 hover:bg-ink-100 hover:text-ink-900;
   }
   .btn-danger {
-    @apply bg-red-600 text-white hover:bg-red-700 shadow-sm;
+    @apply bg-red-600 text-white hover:bg-red-700 active:bg-red-800;
   }
+  /* Square icon-only button used in toolbars and table row actions. */
+  .btn-icon {
+    @apply inline-flex h-8 w-8 items-center justify-center rounded-md border border-ink-300 bg-white
+      text-ink-600 transition-colors hover:bg-ink-50 hover:text-ink-900 hover:border-ink-400
+      disabled:opacity-45 disabled:pointer-events-none cursor-pointer;
+  }
+
+  /* ---------------------------------------------------------------
+     Status tags
+     --------------------------------------------------------------- */
   .badge {
-    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold border tracking-wide;
+    @apply inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-[11.5px] font-semibold border
+      leading-5 whitespace-nowrap;
   }
+
+  /* ---------------------------------------------------------------
+     Data tables - the core of the product
+     --------------------------------------------------------------- */
   .table-th {
-    @apply text-left text-[11px] font-bold uppercase tracking-wider text-slate-500 px-4 py-3 bg-slate-50/75 whitespace-nowrap;
+    @apply text-left text-[11px] font-bold uppercase tracking-[0.06em] text-ink-500 px-3 py-2
+      bg-ink-50 whitespace-nowrap border-b border-line;
   }
   .table-td {
-    @apply px-4 py-3.5 text-sm text-slate-800 align-middle;
+    @apply px-3 py-2 text-[13px] text-ink-700 align-middle;
   }
+  /* Sticky header for long lists - the header stays put while the body
+     scrolls inside a max-height container. */
+  .table-sticky thead th {
+    @apply sticky top-0 z-10;
+  }
+  .table-row {
+    @apply transition-colors duration-100 hover:bg-brand-50/50;
+  }
+  .table-row-link {
+    @apply cursor-pointer transition-colors duration-100 hover:bg-brand-50/50;
+  }
+  /* The identifying cell of a row (name / code) - reads as a link. */
+  .cell-primary {
+    @apply font-semibold text-brand-700;
+  }
+  .cell-muted {
+    @apply text-ink-500;
+  }
+  /* Record-code chip, e.g. TC-SRV-00042 */
+  .code-chip {
+    @apply inline-block rounded bg-ink-100 px-1.5 py-px font-mono text-[11px] font-medium text-ink-600;
+  }
+
+  /* ---------------------------------------------------------------
+     List-view toolbar and saved-view tabs
+     --------------------------------------------------------------- */
+  .toolbar {
+    @apply flex flex-wrap items-center gap-2 border-b border-line bg-white px-3 py-2;
+  }
+  .view-tab {
+    @apply inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[12.5px] font-semibold
+      text-ink-600 transition-colors hover:bg-ink-100 hover:text-ink-900 cursor-pointer
+      whitespace-nowrap;
+  }
+  .view-tab-active {
+    @apply bg-brand-50 text-brand-700 hover:bg-brand-50 hover:text-brand-700;
+  }
+  .view-tab-count {
+    @apply rounded bg-ink-200/70 px-1.5 text-[11px] font-bold text-ink-600 leading-[18px];
+  }
+  .view-tab-active .view-tab-count {
+    @apply bg-brand-600 text-white;
+  }
+
+  /* ---------------------------------------------------------------
+     Application chrome
+     --------------------------------------------------------------- */
   .sidebar-section-header {
-    @apply px-3 pt-4 pb-1 text-[11px] font-bold uppercase tracking-wider text-slate-400 select-none;
+    @apply px-3 pt-4 pb-1 text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-400 select-none;
   }
   .sidebar-link {
-    @apply flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-slate-600
-      transition-all duration-150 hover:bg-slate-100 hover:text-slate-900;
+    @apply relative flex items-center gap-2.5 rounded-md px-2.5 py-[7px] text-[13px] font-medium text-ink-600
+      transition-colors duration-100 hover:bg-ink-100 hover:text-ink-900;
   }
   .sidebar-link-active {
-    @apply bg-brand-50 text-brand-700 font-semibold hover:bg-brand-50 hover:text-brand-700 shadow-xs ring-1 ring-brand-500/10;
+    @apply bg-brand-50 text-brand-700 font-semibold hover:bg-brand-50 hover:text-brand-700
+      before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-[3px]
+      before:rounded-r before:bg-brand-600;
+  }
+  /* Horizontal module tabs in the top bar. */
+  .module-tab {
+    @apply relative inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent
+      px-3 py-2 text-[13px] font-medium text-ink-600 transition-colors
+      hover:border-ink-300 hover:text-ink-900 cursor-pointer;
+  }
+  .module-tab-active {
+    @apply border-brand-600 text-brand-700 font-semibold hover:border-brand-600 hover:text-brand-700;
+  }
+
+  /* ---------------------------------------------------------------
+     Record detail - label/value rows
+     --------------------------------------------------------------- */
+  .detail-label {
+    @apply text-[11.5px] font-semibold uppercase tracking-wide text-ink-500;
+  }
+  .detail-value {
+    @apply text-[13.5px] text-ink-900;
   }
 }
 
@@ -156,20 +300,20 @@
 }
 @keyframes slide-in-right {
   from {
-    transform: translateX(100%);
+    transform: translateX(-100%);
   }
   to {
     transform: translateX(0);
   }
 }
 .animate-fade-in {
-  animation: fade-in 0.15s ease-out;
+  animation: fade-in 0.12s ease-out;
 }
 .animate-slide-up {
-  animation: slide-up 0.2s ease-out;
+  animation: slide-up 0.16s ease-out;
 }
 .animate-slide-in-right {
-  animation: slide-in-right 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: slide-in-right 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @media print {

@@ -205,7 +205,7 @@ export function PartsEditor({
           aria-modal="true"
           aria-label="Part photo"
         >
-          <img src={zoom} alt="Part photo" className="max-h-full max-w-full rounded-xl shadow-2xl" />
+          <img src={zoom} alt="Part photo" className="max-h-full max-w-full rounded-lg shadow-2xl" />
           <button
             type="button"
             className="absolute right-4 top-4 rounded-lg bg-white/90 p-2 text-ink-700 shadow hover:bg-white"

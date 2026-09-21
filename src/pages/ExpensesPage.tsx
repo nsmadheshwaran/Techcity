@@ -13,6 +13,8 @@ import {
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { PageHeader } from '@/components/PageHeader'
+import { StatCard } from '@/components/StatCard'
+import { ListToolbar, SearchInput } from '@/components/ui/ListToolbar'
 import { ExpenseFormModal } from '@/components/expenses/ExpenseFormModal'
 import { EmptyState } from '@/components/ui/States'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
@@ -106,134 +108,101 @@ export default function ExpensesPage() {
         }
       />
 
-      {/* Totals */}
-      <div className="mb-4 grid grid-cols-3 gap-2.5">
-        <div className="card flex items-center gap-3 p-3.5">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-50 text-red-600">
-            <TrendingDown size={18} />
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-[11.5px] font-medium uppercase tracking-wide text-ink-500">
-              Total Spending
-            </p>
-            <p className="truncate text-[16px] font-bold text-red-600">
-              {formatMoney(totals.spent)}
-            </p>
-          </div>
-        </div>
-        <div className="card flex items-center gap-3 p-3.5">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-            <TrendingUp size={18} />
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-[11.5px] font-medium uppercase tracking-wide text-ink-500">
-              Extra Earning
-            </p>
-            <p className="truncate text-[16px] font-bold text-emerald-600">
-              {formatMoney(totals.earned)}
-            </p>
-          </div>
-        </div>
-        <div className="card flex items-center gap-3 p-3.5">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-ink-100 text-ink-600">
-            <Wallet size={18} />
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-[11.5px] font-medium uppercase tracking-wide text-ink-500">
-              Net
-            </p>
-            <p
-              className={`truncate text-[16px] font-bold ${
-                totals.net >= 0 ? 'text-emerald-600' : 'text-red-600'
-              }`}
-            >
-              {formatMoney(totals.net)}
-            </p>
-          </div>
-        </div>
+      {/* Totals — same KPI tile the rest of the app uses */}
+      <div className="mb-3.5 grid grid-cols-3 gap-2.5">
+        <StatCard
+          label="Total Spending"
+          value={formatMoney(totals.spent)}
+          icon={TrendingDown}
+          tone="danger"
+        />
+        <StatCard
+          label="Extra Earning"
+          value={formatMoney(totals.earned)}
+          icon={TrendingUp}
+          tone="success"
+        />
+        <StatCard
+          label="Net"
+          value={formatMoney(totals.net)}
+          icon={Wallet}
+          tone={totals.net >= 0 ? 'success' : 'danger'}
+        />
       </div>
 
-      {/* Filters */}
-      <div className="card mb-4 flex flex-wrap items-center gap-2 p-3">
-        <div className="relative min-w-0 flex-1 basis-52">
-          <Search
-            size={15}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-400"
-          />
-          <input
-            className="input pl-9"
-            placeholder="Search title, category, notes…"
+      <div className="panel">
+        <ListToolbar>
+          <SearchInput
+            className="min-w-0 flex-1 basis-52"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={setQuery}
+            placeholder="Search title, category, notes…"
+            ariaLabel="Search expenses"
           />
-        </div>
-        <div className="flex overflow-hidden rounded-lg border border-ink-300">
-          {(
-            [
-              ['all', 'All'],
-              ['expense', 'Money Out'],
-              ['income', 'Money In'],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setTypeFilter(value)}
-              className={`px-3 py-2 text-[12.5px] font-medium transition-colors ${
-                typeFilter === value ? 'bg-ink-900 text-white' : 'bg-white text-ink-600 hover:bg-ink-50'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <select
-          className="input w-auto"
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          aria-label="Filter by category"
-        >
-          <option value="all">All categories</option>
-          {CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-        {(query || typeFilter !== 'all' || category !== 'all') && (
-          <button
-            className="btn-ghost px-2 py-1.5 text-[12.5px]"
-            onClick={() => {
-              setQuery('')
-              setTypeFilter('all')
-              setCategory('all')
-            }}
+          <div className="flex overflow-hidden rounded-md border border-ink-300">
+            {(
+              [
+                ['all', 'All'],
+                ['expense', 'Money Out'],
+                ['income', 'Money In'],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setTypeFilter(value)}
+                className={`px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
+                  typeFilter === value
+                    ? 'bg-brand-600 text-white'
+                    : 'bg-white text-ink-600 hover:bg-ink-50'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <select
+            className="input w-auto py-1.5 text-[12.5px] font-medium"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            aria-label="Filter by category"
           >
-            <X size={13} /> Clear
-          </button>
-        )}
-      </div>
+            <option value="all">All categories</option>
+            {CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          {(query || typeFilter !== 'all' || category !== 'all') && (
+            <button
+              className="btn-ghost"
+              onClick={() => {
+                setQuery('')
+                setTypeFilter('all')
+                setCategory('all')
+              }}
+            >
+              <X size={13} /> Clear
+            </button>
+          )}
+        </ListToolbar>
 
-      {!expenses?.length ? (
-        <div className="card">
+        {!expenses?.length ? (
           <EmptyState
             icon={Wallet}
             title="No expenses tracked yet"
             message="Record fuel, food, part purchases and other shop spending here — plus extra earnings like scrap sales."
             action={
               <button className="btn-primary" onClick={() => setModalOpen(true)}>
-                <Plus size={16} /> Add your first entry
+                <Plus size={14} /> Add your first entry
               </button>
             }
           />
-        </div>
-      ) : !filtered.length ? (
-        <div className="card">
+        ) : !filtered.length ? (
           <EmptyState icon={Search} title="Nothing matches" message="Try different filters." />
-        </div>
-      ) : (
-        <div className="card overflow-hidden">
-          <ul className="divide-y divide-ink-100">
+        ) : (
+          <ul className="divide-y divide-line-soft">
             {filtered.map((e) => {
               const income = e.type === 'income'
               return (
@@ -295,8 +264,8 @@ export default function ExpensesPage() {
               )
             })}
           </ul>
-        </div>
-      )}
+        )}
+      </div>
 
       <ExpenseFormModal
         open={modalOpen}

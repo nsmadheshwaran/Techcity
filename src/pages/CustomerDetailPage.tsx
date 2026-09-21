@@ -40,7 +40,6 @@ import {
 } from '@/hooks/useData'
 import { computeStats, deleteCustomer } from '@/services/customers'
 import { deleteEquipment } from '@/services/equipment'
-import { buildDocument } from '@/pdf/documents'
 import {
   formatDate,
   formatDateLong,
@@ -198,6 +197,7 @@ export default function CustomerDetailPage() {
     if (!customer) return
     try {
       const custPayments = payments ?? []
+      const { buildDocument } = await import('@/pdf/documents')
       const doc = buildDocument({
         kind: 'history',
         service: {
@@ -241,20 +241,25 @@ export default function CustomerDetailPage() {
         subtitle={`${customer.code} · Customer since ${formatDate(customer.dateAdded)}`}
         actions={
           <>
+            {/* Delete leads the row rather than sitting beside "New Service" —
+                a misclick there would take the customer and every linked record. */}
+            <button
+              className="btn-secondary text-red-600 hover:border-red-300 hover:bg-red-50"
+              onClick={onDelete}
+            >
+              <Trash2 size={14} /> <span className="sr-only sm:not-sr-only">Delete</span>
+            </button>
             <button className="btn-secondary" onClick={downloadHistory} disabled={!services?.length}>
-              <Download size={15} /> <span className="hidden sm:inline">History</span>
+              <Download size={14} /> <span className="sr-only sm:not-sr-only">History</span>
             </button>
             <button className="btn-secondary" onClick={() => setEditOpen(true)}>
-              <Pencil size={15} /> <span className="hidden sm:inline">Edit</span>
+              <Pencil size={14} /> <span className="sr-only sm:not-sr-only">Edit</span>
             </button>
             <Link className="btn-secondary" to={`/quotations/new?customerId=${customer.id}`}>
-              <ScrollText size={15} /> <span className="hidden sm:inline">Quotation</span>
+              <ScrollText size={14} /> <span className="sr-only sm:not-sr-only">Quotation</span>
             </Link>
-            <button className="btn-secondary text-red-600 hover:bg-red-50" onClick={onDelete}>
-              <Trash2 size={15} /> <span className="hidden sm:inline">Delete</span>
-            </button>
             <Link className="btn-primary" to={`/services/new?customerId=${customer.id}`}>
-              <Plus size={16} /> New Service
+              <Plus size={14} /> New Service
             </Link>
           </>
         }
@@ -381,7 +386,7 @@ export default function CustomerDetailPage() {
             <h3 className="border-b border-ink-200 px-4 py-3 text-[15px] font-semibold text-ink-900">
               Service Summary
             </h3>
-            <dl className="divide-y divide-ink-100">
+            <dl className="divide-y divide-line-soft">
               <SummaryRow label="Total Services" value={String(stats.totalServices)} />
               <SummaryRow
                 label="Total Amount Spent"
@@ -458,7 +463,7 @@ export default function CustomerDetailPage() {
               </div>
             ) : (
               <>
-                <ul className="divide-y divide-ink-100">
+                <ul className="divide-y divide-line-soft">
                   {monthlyServices.map((s) => (
                     <li key={s.id}>
                       <Link
@@ -498,8 +503,8 @@ export default function CustomerDetailPage() {
 
         {/* Right: tabs */}
         <div className="lg:col-span-2">
-          <div className="card overflow-hidden">
-            <div className="flex overflow-x-auto border-b border-ink-200">
+          <div className="panel">
+            <div className="flex overflow-x-auto border-b border-line bg-ink-50/70 px-1">
               {(
                 [
                   ['contacts', `Contacts (${primaryContacts.length})`],
@@ -513,11 +518,7 @@ export default function CustomerDetailPage() {
                 <button
                   key={key}
                   onClick={() => setTab(key)}
-                  className={`whitespace-nowrap border-b-2 px-4 py-3 text-[13.5px] font-medium transition-colors ${
-                    tab === key
-                      ? 'border-brand-600 text-brand-700'
-                      : 'border-transparent text-ink-500 hover:text-ink-800'
-                  }`}
+                  className={`module-tab ${tab === key ? 'module-tab-active' : ''}`}
                 >
                   {label}
                 </button>
@@ -533,7 +534,7 @@ export default function CustomerDetailPage() {
                     message="Add the owner, manager, and other people associated with this customer."
                   />
                 ) : (
-                  <ul className="divide-y divide-ink-100">
+                  <ul className="divide-y divide-line-soft">
                     {primaryContacts.map((c) => (
                       <li key={c.id} className="flex items-center gap-3 px-4 py-3">
                         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[12px] font-semibold text-brand-700">
@@ -581,7 +582,7 @@ export default function CustomerDetailPage() {
                   }
                 />
               ) : (
-                <ul className="divide-y divide-ink-100">
+                <ul className="divide-y divide-line-soft">
                   {services.map((s) => (
                     <li key={s.id}>
                       <Link
@@ -664,7 +665,7 @@ export default function CustomerDetailPage() {
                     }
                   />
                 ) : (
-                  <ul className="divide-y divide-ink-100">
+                  <ul className="divide-y divide-line-soft">
                     {equipment.map((e) => (
                       <li key={e.id} className="flex items-start gap-3 px-4 py-3.5">
                         <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-ink-100 text-ink-500">
@@ -716,7 +717,7 @@ export default function CustomerDetailPage() {
                   }
                 />
               ) : (
-                <ul className="divide-y divide-ink-100">
+                <ul className="divide-y divide-line-soft">
                   {calls.map((c) => (
                     <li key={c.id} className="flex items-start gap-3 px-4 py-3">
                       <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-ink-100 text-ink-500">
@@ -784,7 +785,7 @@ export default function CustomerDetailPage() {
                   message="Reminders are created automatically when you set a next service date or warranty on a service."
                 />
               ) : (
-                <ul className="divide-y divide-ink-100">
+                <ul className="divide-y divide-line-soft">
                   {reminders.map((r) => (
                     <li key={r.id} className="flex items-start gap-3 px-4 py-3">
                       <span

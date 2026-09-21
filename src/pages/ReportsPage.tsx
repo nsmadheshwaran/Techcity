@@ -80,9 +80,9 @@ export default function ReportsPage() {
         }
       />
 
-      <ServiceFilters filters={filters} onChange={setFilters} serviceTypes={serviceTypes} />
+      <div className="panel">
+        <ServiceFilters filters={filters} onChange={setFilters} serviceTypes={serviceTypes} />
 
-      <div className="card overflow-hidden">
         {!services ? (
           <SkeletonRows rows={5} cols={4} />
         ) : filtered.length === 0 ? (
@@ -108,7 +108,7 @@ export default function ReportsPage() {
           />
         ) : (
           <>
-            <ul className="divide-y divide-ink-100">
+            <ul className="divide-y divide-line-soft">
               {slice.map((s) => {
                 const customer = customerMap.get(s.customerId)
                 return (
@@ -141,7 +141,7 @@ export default function ReportsPage() {
                           className="btn-secondary py-1.5 px-2.5 text-[12.5px]"
                           onClick={() => navigate(`/services/${s.id}`)}
                         >
-                          <Eye size={15} /> <span className="hidden sm:inline">Open</span>
+                          <Eye size={15} /> <span className="sr-only sm:not-sr-only">Open</span>
                         </button>
                         {customer && (
                           <DocumentActions
@@ -156,13 +156,13 @@ export default function ReportsPage() {
                           className="btn-secondary py-1.5 px-2.5 text-[12.5px]"
                           onClick={() => navigate(`/services/${s.id}/edit`)}
                         >
-                          <Pencil size={15} /> <span className="hidden sm:inline">Edit</span>
+                          <Pencil size={15} /> <span className="sr-only sm:not-sr-only">Edit</span>
                         </button>
                         <button
                           className="btn-secondary py-1.5 px-2.5 text-[12.5px] text-red-600 hover:bg-red-50"
                           onClick={() => onDelete(s.id, s.code)}
                         >
-                          <Trash2 size={15} /> <span className="hidden sm:inline">Delete</span>
+                          <Trash2 size={15} /> <span className="sr-only sm:not-sr-only">Delete</span>
                         </button>
                       </div>
                     </div>

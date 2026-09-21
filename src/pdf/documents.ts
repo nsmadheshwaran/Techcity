@@ -1068,14 +1068,26 @@ export function buildInvoiceDocument(input: DocInput): jsPDF {
   ]
   if (settings.terms) {
     const customTerms = doc.splitTextToSize(clean(settings.terms), bankX - M - 4) as string[]
-    declLines.push(...customTerms.slice(0, 2))
+    declLines.push(...customTerms.slice(0, 4))
   }
-  let dy = declY + 6.8
+
+  // The declaration box has a fixed height, so a shop with its own Terms &
+  // Conditions used to have them silently clipped off the bottom of the
+  // invoice. Tighten the leading (and the type, within legible limits) until
+  // everything the owner configured actually fits inside the box.
+  const declTop = declY + 6.8
+  const declBottom = bottomY - 5
+  const declAvail = declBottom - declTop
+  let declStep = 2.8
+  if (declLines.length * declStep > declAvail && declLines.length > 0) {
+    declStep = Math.max(2.1, declAvail / declLines.length)
+    doc.setFontSize(Math.max(4.8, Math.min(5.8, declStep * 2.07)))
+  }
+  let dy = declTop
   for (const dl of declLines) {
-    if (dy < bottomY - 6) {
-      doc.text(dl, M + 2, dy)
-      dy += 2.8
-    }
+    if (dy > declBottom) break
+    doc.text(dl, M + 2, dy)
+    dy += declStep
   }
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(6.8)

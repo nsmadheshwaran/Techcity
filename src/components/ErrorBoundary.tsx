@@ -25,7 +25,7 @@ export class ErrorBoundary extends Component<Props, State> {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-ink-50 p-6">
         <div className="card max-w-md p-6 text-center">
-          <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-red-50 text-red-600">
+          <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-red-50 text-red-600">
             <AlertTriangle size={22} />
           </span>
           <h1 className="text-base font-semibold text-ink-900">The application hit an error</h1>

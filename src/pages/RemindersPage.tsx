@@ -79,14 +79,14 @@ export default function RemindersPage() {
         subtitle={`${pendingCount} open reminder${pendingCount === 1 ? '' : 's'} — next services, warranties and follow-ups.`}
         actions={
           <button className="btn-primary" onClick={() => setAddOpen(true)}>
-            <Plus size={16} /> Add Reminder
+            <Plus size={14} /> Add Reminder
           </button>
         }
       />
 
-      <div className="card mb-4 flex flex-wrap items-center gap-3 p-3">
+      <div className="card mb-3.5 flex flex-wrap items-center gap-3 px-3 py-2">
         <select
-          className="input w-auto py-2 text-[13px]"
+          className="input w-auto py-1.5 text-[12.5px] font-medium"
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
           aria-label="Filter by type"
@@ -97,7 +97,7 @@ export default function RemindersPage() {
           <option value="Payment">Payment</option>
           <option value="Custom">Custom</option>
         </select>
-        <label className="flex cursor-pointer items-center gap-2 text-[13px] text-ink-700">
+        <label className="flex cursor-pointer items-center gap-2 text-[12.5px] font-medium text-ink-700">
           <input
             type="checkbox"
             className="h-4 w-4 rounded border-ink-300 accent-brand-600"
@@ -120,23 +120,23 @@ export default function RemindersPage() {
             message="Reminders are created automatically when you set a next service date or warranty period on a service."
             action={
               <button className="btn-primary" onClick={() => setAddOpen(true)}>
-                <Plus size={16} /> Add Reminder
+                <Plus size={14} /> Add Reminder
               </button>
             }
           />
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3.5">
           {BUCKETS.map(({ key, label, tone }) => {
             const items = groups[key]
             if (!items.length) return null
             return (
-              <section key={key} className="card overflow-hidden">
-                <div className="flex items-center justify-between border-b border-ink-200 px-4 py-2.5">
-                  <h2 className="text-[14px] font-semibold text-ink-900">{label}</h2>
+              <section key={key} className="panel">
+                <div className="panel-header">
+                  <h2 className="panel-title">{label}</h2>
                   <span className={`badge ${tone}`}>{items.length}</span>
                 </div>
-                <ul className="divide-y divide-ink-100">
+                <ul className="divide-y divide-line-soft">
                   {items.map((r) => {
                     const c = customerMap.get(r.customerId)
                     return (
@@ -300,7 +300,7 @@ function AddReminderModal({
           {error}
         </div>
       )}
-      <div className="space-y-4">
+      <div className="space-y-3.5">
         <SelectField
           label="Customer"
           required

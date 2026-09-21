@@ -74,7 +74,7 @@ function ToastCard({ toast, onClose }: { toast: ToastItem; onClose: () => void }
   return (
     <div
       role="status"
-      className={`pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-xl border ${ring} bg-white px-4 py-3 shadow-lg animate-slide-up`}
+      className={`pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-lg border ${ring} bg-white px-4 py-3 shadow-lg animate-slide-up`}
     >
       <Icon size={18} className={`mt-0.5 shrink-0 ${iconColor}`} />
       <div className="min-w-0 flex-1">

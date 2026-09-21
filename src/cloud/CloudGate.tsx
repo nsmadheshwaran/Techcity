@@ -334,7 +334,7 @@ export function CloudLogin({ onContinueOffline, isModal = false }: CloudLoginPro
   if (isModal) return content
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-ink-100 via-slate-100 to-brand-50/40 px-4 py-10">
+    <div className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-ink-100 via-ink-100 to-brand-50/40 px-4 py-10">
       {content}
     </div>
   )
@@ -443,7 +443,7 @@ export function CloudStatusCard() {
 
       {cloud.userEmail ? (
         <div className="space-y-3.5">
-          <div className="flex items-center justify-between rounded-xl bg-ink-50 p-3 text-[13px] border border-ink-100">
+          <div className="flex items-center justify-between rounded-lg bg-ink-50 p-3 text-[13px] border border-ink-100">
             <div className="flex items-center gap-2">
               {cloud.syncing ? (
                 <>
@@ -487,7 +487,7 @@ export function CloudStatusCard() {
           </div>
         </div>
       ) : (
-        <div className="rounded-xl border border-dashed border-ink-300 bg-ink-50/60 p-4 text-center">
+        <div className="rounded-lg border border-dashed border-ink-300 bg-ink-50/60 p-4 text-center">
           <p className="text-[13px] font-medium text-ink-800">
             Working in offline local storage mode
           </p>

@@ -50,24 +50,24 @@ export function Modal({ open, onClose, title, description, children, footer, siz
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`relative flex max-h-[92vh] w-full flex-col rounded-t-2xl bg-white shadow-2xl animate-slide-up sm:rounded-2xl ${SIZES[size]}`}
+        className={`relative flex max-h-[92vh] w-full flex-col rounded-t-lg bg-white shadow-2xl animate-slide-up sm:rounded-lg ${SIZES[size]}`}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-ink-200 px-5 py-4">
+        <div className="flex items-start justify-between gap-4 border-b border-line px-4 py-3">
           <div className="min-w-0">
-            <h2 className="text-base font-semibold text-ink-900">{title}</h2>
+            <h2 className="text-[15px] font-bold text-ink-900">{title}</h2>
             {description && <p className="mt-0.5 text-[13px] text-ink-500">{description}</p>}
           </div>
           <button
             onClick={onClose}
-            className="-mr-1 shrink-0 rounded-lg p-1.5 text-ink-400 transition-colors hover:bg-ink-100 hover:text-ink-800"
+            className="-mr-1 shrink-0 rounded-md p-1.5 text-ink-400 transition-colors hover:bg-ink-100 hover:text-ink-800"
             aria-label="Close"
           >
             <X size={18} />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">{children}</div>
         {footer && (
-          <div className="flex flex-col-reverse gap-2 border-t border-ink-200 px-5 py-3.5 sm:flex-row sm:justify-end">
+          <div className="flex flex-col-reverse gap-2 border-t border-line bg-ink-50/60 px-4 py-3 sm:flex-row sm:justify-end">
             {footer}
           </div>
         )}

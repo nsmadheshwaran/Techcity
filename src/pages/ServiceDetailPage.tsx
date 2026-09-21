@@ -204,10 +204,10 @@ export default function ServiceDetailPage() {
         actions={
           <>
             <button className="btn-secondary" onClick={() => navigate(`/services/${service.id}/edit`)}>
-              <Pencil size={15} /> <span className="hidden sm:inline">Edit</span>
+              <Pencil size={15} /> <span className="sr-only sm:not-sr-only">Edit</span>
             </button>
             <button className="btn-secondary text-red-600 hover:bg-red-50" onClick={onDelete}>
-              <Trash2 size={15} /> <span className="hidden sm:inline">Delete</span>
+              <Trash2 size={15} /> <span className="sr-only sm:not-sr-only">Delete</span>
             </button>
           </>
         }
@@ -336,7 +336,7 @@ export default function ServiceDetailPage() {
               <>
                 <div className="overflow-x-auto">
                   <table className="w-full">
-                    <thead className="border-b border-ink-200 bg-ink-50/60">
+                    <thead>
                       <tr>
                         <th className="table-th">Part</th>
                         <th className="table-th">Photo</th>
@@ -345,7 +345,7 @@ export default function ServiceDetailPage() {
                         <th className="table-th text-right">Amount</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-ink-100">
+                    <tbody className="divide-y divide-line-soft">
                       {parts.map((p) => (
                         <tr key={p.id}>
                           <td className="table-td">{p.name}</td>
@@ -507,7 +507,7 @@ export default function ServiceDetailPage() {
                 No visits logged yet. Every trip to the customer's location can be recorded here.
               </p>
             ) : (
-              <ul className="divide-y divide-ink-100">
+              <ul className="divide-y divide-line-soft">
                 {visits.map((v) => (
                   <li key={v.id} className="flex items-center gap-3 px-4 py-2.5">
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
@@ -549,7 +549,7 @@ export default function ServiceDetailPage() {
                 No payments recorded yet.
               </p>
             ) : (
-              <ul className="divide-y divide-ink-100">
+              <ul className="divide-y divide-line-soft">
                 {payments.map((p) => (
                   <li key={p.id} className="flex items-center gap-3 px-4 py-3">
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
@@ -712,7 +712,7 @@ export default function ServiceDetailPage() {
           <img
             src={photoZoom}
             alt="Part photo"
-            className="max-h-full max-w-full rounded-xl shadow-2xl"
+            className="max-h-full max-w-full rounded-lg shadow-2xl"
           />
           <button
             type="button"

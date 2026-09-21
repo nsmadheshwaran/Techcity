@@ -148,12 +148,12 @@ export default function DashboardPage() {
     <>
       <PageHeader
         title="Dashboard"
-        subtitle={`${settings.name} — Executive Overview & Operations`}
+        subtitle={`${settings.name} — operations overview`}
         actions={
           <div className="flex items-center gap-2">
-            <span className="hidden sm:inline-block text-xs font-medium text-slate-500">Period:</span>
+            <span className="hidden text-[12px] font-semibold text-ink-500 sm:inline-block">Period</span>
             <select
-              className="input w-auto py-1.5 px-3 text-xs font-semibold bg-white shadow-2xs border-slate-200"
+              className="input w-auto py-1.5 text-[12.5px] font-semibold"
               value={range}
               onChange={(e) => setRange(e.target.value as RangeKey)}
               aria-label="Date range"
@@ -169,52 +169,49 @@ export default function DashboardPage() {
       />
 
       {/* Quick Actions Bar */}
-      <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
-        <button
-          className="btn-primary py-2.5 px-3 text-xs font-semibold shadow-xs"
-          onClick={() => setAddCustomerOpen(true)}
-        >
-          <UserPlus size={15} /> Add Customer
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+        <button className="btn-primary" onClick={() => setAddCustomerOpen(true)}>
+          <UserPlus size={14} /> Add Customer
         </button>
         <button
-          className="btn-secondary py-2.5 px-3 text-xs font-medium"
+          className="btn-secondary"
           onClick={() => navigate('/services/new')}
         >
-          <Plus size={15} className="text-brand-600" /> New Service
+          <Plus size={14} /> New Service
         </button>
         <button
-          className="btn-secondary py-2.5 px-3 text-xs font-medium"
+          className="btn-secondary"
           onClick={() => navigate('/calls')}
         >
-          <PhoneCall size={15} className="text-amber-600" /> Book Call
+          <PhoneCall size={14} /> Book Call
         </button>
         <button
-          className="btn-secondary py-2.5 px-3 text-xs font-medium"
+          className="btn-secondary"
           onClick={() => navigate('/quotations/new')}
         >
-          <ScrollText size={15} className="text-purple-600" /> New Quote
+          <ScrollText size={14} /> New Quote
         </button>
         <button
-          className="btn-secondary py-2.5 px-3 text-xs font-medium"
+          className="btn-secondary"
           onClick={() => navigate('/reports')}
         >
-          <FileText size={15} className="text-slate-600" /> Reports
+          <FileText size={14} /> Reports
         </button>
         <button
-          className="btn-secondary py-2.5 px-3 text-xs font-medium"
+          className="btn-secondary"
           onClick={globalSearch.open}
         >
-          <Search size={15} className="text-slate-500" /> Search Ctrl+K
+          <Search size={14} /> Search
         </button>
       </div>
 
       {/* Primary KPI Stat Cards */}
       {loading ? (
-        <div className="card mb-6 p-4">
+        <div className="card mb-4 p-4">
           <SkeletonRows rows={3} cols={4} />
         </div>
       ) : (
-        <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+        <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
           <StatCard
             label={`Revenue (${rangeLabel})`}
             value={formatMoney(stats.revenueInRange, settings.currency)}
@@ -283,13 +280,15 @@ export default function DashboardPage() {
       )}
 
       {/* Main CRM Grid: Recent Services & Action Attention Hub */}
-      <div className="grid gap-5 xl:grid-cols-3">
+      <div className="grid gap-4 xl:grid-cols-3">
         {/* Recent services pipeline */}
-        <section className="card xl:col-span-2 overflow-hidden border border-slate-200/80">
-          <div className="flex items-center justify-between border-b border-slate-200/80 px-5 py-3.5 bg-slate-50/50">
+        <section className="panel xl:col-span-2">
+          <div className="panel-header">
             <div>
-              <h2 className="text-[15px] font-bold text-slate-900 leading-tight">Recent Services</h2>
-              <p className="text-[11.5px] text-slate-500">Live service progress & billing status</p>
+              <h2 className="panel-title">Recent Services</h2>
+              <p className="mt-0.5 text-[11.5px] normal-case tracking-normal text-ink-500">
+                Live service progress and billing status
+              </p>
             </div>
             <Link
               to="/services"
@@ -310,7 +309,7 @@ export default function DashboardPage() {
               message="Create your first service job sheet to track status and invoices."
               action={
                 <button className="btn-primary" onClick={() => navigate('/services/new')}>
-                  <Plus size={16} /> New Service
+                  <Plus size={14} /> New Service
                 </button>
               }
             />
@@ -319,7 +318,7 @@ export default function DashboardPage() {
               {/* Desktop table */}
               <div className="hidden overflow-x-auto sm:block">
                 <table className="w-full">
-                  <thead className="border-b border-slate-200/80 bg-slate-50/75">
+                  <thead>
                     <tr>
                       <th className="table-th">Customer & Code</th>
                       <th className="table-th">Service Type</th>
@@ -328,33 +327,33 @@ export default function DashboardPage() {
                       <th className="table-th">Status</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-line-soft">
                     {stats.recent.map((s) => (
                       <tr
                         key={s.id}
-                        className="cursor-pointer transition-colors hover:bg-slate-50/80"
+                        className="table-row-link"
                         onClick={() => navigate(`/services/${s.id}`)}
                       >
                         <td className="table-td">
-                          <span className="font-semibold text-slate-900 block">
+                          <span className="font-semibold text-ink-900 block">
                             {customerMap.get(s.customerId)?.name ?? 'Unknown Customer'}
                           </span>
-                          <span className="inline-block mt-0.5 rounded bg-slate-100 px-1.5 py-0.2 text-[11px] font-medium text-slate-600">
+                          <span className="code-chip mt-0.5">
                             {s.code}
                           </span>
                         </td>
                         <td className="table-td">
-                          <span className="text-slate-800 font-medium">{s.serviceType}</span>
+                          <span className="text-ink-800 font-medium">{s.serviceType}</span>
                           {s.product && (
-                            <span className="block text-xs text-slate-400">
+                            <span className="block text-xs text-ink-400">
                               {[s.product, s.brand].filter(Boolean).join(' · ')}
                             </span>
                           )}
                         </td>
-                        <td className="table-td whitespace-nowrap text-slate-500 text-xs">
+                        <td className="table-td whitespace-nowrap text-ink-500 text-xs">
                           {formatDate(s.serviceDate)}
                         </td>
-                        <td className="table-td text-right font-semibold text-slate-900">
+                        <td className="table-td text-right font-semibold text-ink-900">
                           {formatMoney(s.totalAmount, settings.currency)}
                           {s.balance > 0 && (
                             <span className="mt-0.5 block text-[11px] font-bold text-rose-600">
@@ -372,27 +371,27 @@ export default function DashboardPage() {
               </div>
 
               {/* Mobile cards */}
-              <ul className="divide-y divide-slate-100 sm:hidden">
+              <ul className="divide-y divide-line-soft sm:hidden">
                 {stats.recent.map((s) => (
                   <li key={s.id}>
                     <button
                       onClick={() => navigate(`/services/${s.id}`)}
-                      className="w-full px-4 py-3 text-left transition-colors active:bg-slate-50"
+                      className="w-full px-4 py-3 text-left transition-colors active:bg-brand-50/50"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-bold text-slate-900">
+                          <p className="truncate text-sm font-bold text-ink-900">
                             {customerMap.get(s.customerId)?.name ?? 'Unknown Customer'}
                           </p>
-                          <p className="mt-0.5 truncate text-[13px] text-slate-600 font-medium">
+                          <p className="mt-0.5 truncate text-[13px] text-ink-600 font-medium">
                             {s.serviceType}
                           </p>
-                          <p className="mt-1 text-[11.5px] text-slate-400">
+                          <p className="mt-1 text-[11.5px] text-ink-400">
                             {formatDate(s.serviceDate)} · {s.code}
                           </p>
                         </div>
                         <div className="shrink-0 text-right">
-                          <p className="text-sm font-bold text-slate-900">
+                          <p className="text-sm font-bold text-ink-900">
                             {formatMoney(s.totalAmount, settings.currency)}
                           </p>
                           <div className="mt-1.5">
@@ -411,15 +410,15 @@ export default function DashboardPage() {
         {/* Right column: Action & Reminder Center */}
         <div className="space-y-4">
           {/* Urgent Reminders / Follow-ups */}
-          <section className="card overflow-hidden border border-slate-200/80">
-            <div className="flex items-center justify-between border-b border-slate-200/80 px-4 py-3 bg-slate-50/50">
+          <section className="panel">
+            <div className="panel-header">
               <div className="flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-50 text-rose-600">
+                <span className="flex h-6 w-6 items-center justify-center rounded bg-rose-50 text-rose-600">
                   <Bell size={14} />
                 </span>
-                <h2 className="text-[14px] font-bold text-slate-900">Upcoming Reminders</h2>
+                <h2 className="panel-title">Upcoming Reminders</h2>
               </div>
-              <Link to="/reminders" className="text-xs font-semibold text-brand-700 hover:underline">
+              <Link to="/reminders" className="text-[12px] font-semibold text-brand-700 hover:underline">
                 View all
               </Link>
             </div>
@@ -428,23 +427,23 @@ export default function DashboardPage() {
                 <SkeletonRows rows={3} cols={2} />
               </div>
             ) : dueReminders.length === 0 ? (
-              <div className="px-4 py-8 text-center text-xs text-slate-500">
+              <div className="px-4 py-8 text-center text-xs text-ink-500">
                 All clear! No overdue or upcoming reminders for this week.
               </div>
             ) : (
-              <ul className="divide-y divide-slate-100">
+              <ul className="divide-y divide-line-soft">
                 {dueReminders.map((r) => {
                   const c = customerMap.get(r.customerId)
                   return (
-                    <li key={r.id} className="p-3 hover:bg-slate-50 transition-colors">
+                    <li key={r.id} className="p-3 transition-colors hover:bg-brand-50/40">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-xs font-bold text-slate-900">{r.title}</p>
-                          <p className="mt-0.5 truncate text-[11.5px] text-slate-600">
+                          <p className="truncate text-xs font-bold text-ink-900">{r.title}</p>
+                          <p className="mt-0.5 truncate text-[11.5px] text-ink-600">
                             {c ? c.name : 'Unassigned'} {c?.phone ? `· ${c.phone}` : ''}
                           </p>
                         </div>
-                        <span className="shrink-0 rounded-full bg-amber-50 border border-amber-200/80 px-2 py-0.5 text-[10.5px] font-bold text-amber-800">
+                        <span className="badge shrink-0 border-amber-200 bg-amber-50 text-amber-800">
                           {dueLabel(r.dueDate)}
                         </span>
                       </div>
@@ -456,15 +455,15 @@ export default function DashboardPage() {
           </section>
 
           {/* Upcoming Maintenance Preview */}
-          <section className="card overflow-hidden border border-slate-200/80">
-            <div className="flex items-center justify-between border-b border-slate-200/80 px-4 py-3 bg-slate-50/50">
+          <section className="panel">
+            <div className="panel-header">
               <div className="flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+                <span className="flex h-6 w-6 items-center justify-center rounded bg-brand-50 text-brand-600">
                   <CalendarClock size={14} />
                 </span>
-                <h2 className="text-[14px] font-bold text-slate-900">Scheduled Maintenance</h2>
+                <h2 className="panel-title">Scheduled Maintenance</h2>
               </div>
-              <Link to="/reminders" className="text-xs font-semibold text-brand-700 hover:underline">
+              <Link to="/reminders" className="text-[12px] font-semibold text-brand-700 hover:underline">
                 All
               </Link>
             </div>
@@ -473,11 +472,11 @@ export default function DashboardPage() {
                 <SkeletonRows rows={2} cols={2} />
               </div>
             ) : stats.upcoming.length === 0 ? (
-              <div className="px-4 py-6 text-center text-xs text-slate-500">
+              <div className="px-4 py-6 text-center text-xs text-ink-500">
                 No scheduled maintenance in next 30 days.
               </div>
             ) : (
-              <ul className="divide-y divide-slate-100">
+              <ul className="divide-y divide-line-soft">
                 {stats.upcoming.slice(0, 4).map((s) => {
                   const c = customerMap.get(s.customerId)
                   const d = daysUntil(s.nextServiceDate) ?? 0
@@ -485,18 +484,18 @@ export default function DashboardPage() {
                     <li key={s.id}>
                       <Link
                         to={`/services/${s.id}`}
-                        className="flex items-center justify-between gap-2 p-3 transition-colors hover:bg-slate-50"
+                        className="flex items-center justify-between gap-2 p-3 transition-colors hover:bg-brand-50/40"
                       >
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-xs font-bold text-slate-900">
+                          <p className="truncate text-xs font-bold text-ink-900">
                             {c?.name ?? 'Unknown Customer'}
                           </p>
-                          <p className="mt-0.5 truncate text-[11.5px] text-slate-500">
+                          <p className="mt-0.5 truncate text-[11.5px] text-ink-500">
                             {s.serviceType}
                           </p>
                         </div>
                         <span className="shrink-0 text-right">
-                          <span className="inline-block rounded-md bg-slate-100 px-2 py-0.5 text-[10.5px] font-semibold text-slate-700">
+                          <span className="badge border-ink-200 bg-ink-100 text-ink-700">
                             {d === 0 ? 'Today' : `in ${d}d`}
                           </span>
                         </span>

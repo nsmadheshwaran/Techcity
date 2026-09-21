@@ -63,19 +63,17 @@ export default function ServicesPage() {
         actions={
           <>
             <button className="btn-secondary" onClick={onExport} disabled={!services?.length}>
-              <Download size={16} /> <span className="hidden sm:inline">Export CSV</span>
+              <Download size={14} /> <span className="sr-only sm:not-sr-only">Export CSV</span>
             </button>
             <button className="btn-primary" onClick={() => navigate('/services/new')}>
-              <Plus size={16} /> New Service
+              <Plus size={14} /> New Service
             </button>
           </>
         }
       />
 
-      <ServiceFilters filters={filters} onChange={setFilters} serviceTypes={serviceTypes} />
-
       {filtered.length > 0 && (
-        <div className="mb-4 grid grid-cols-3 gap-3">
+        <div className="mb-3.5 grid grid-cols-3 gap-3">
           <SummaryTile label="Billed" value={formatMoney(totals.billed, settings.currency)} />
           <SummaryTile
             label="Collected"
@@ -90,7 +88,9 @@ export default function ServicesPage() {
         </div>
       )}
 
-      <div className="card overflow-hidden">
+      <div className="panel">
+        <ServiceFilters filters={filters} onChange={setFilters} serviceTypes={serviceTypes} />
+
         {!services ? (
           <SkeletonRows rows={6} cols={5} />
         ) : filtered.length === 0 ? (
@@ -118,7 +118,7 @@ export default function ServicesPage() {
           <>
             <div className="hidden overflow-x-auto lg:block">
               <table className="w-full">
-                <thead className="border-b border-ink-200 bg-ink-50/60">
+                <thead>
                   <tr>
                     <th className="table-th">Service</th>
                     <th className="table-th">Customer</th>
@@ -129,33 +129,33 @@ export default function ServicesPage() {
                     <th className="table-th">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-ink-100">
+                <tbody className="divide-y divide-line-soft">
                   {slice.map((s) => {
                     const c = customerMap.get(s.customerId)
                     return (
                       <tr
                         key={s.id}
                         onClick={() => navigate(`/services/${s.id}`)}
-                        className="cursor-pointer transition-colors hover:bg-ink-50"
+                        className="table-row-link"
                       >
                         <td className="table-td">
-                          <p className="font-medium text-ink-900">{s.serviceType}</p>
-                          <p className="text-[12px] text-ink-500">{s.code}</p>
+                          <p className="cell-primary">{s.serviceType}</p>
+                          <span className="code-chip">{s.code}</span>
                         </td>
                         <td className="table-td">
-                          <p className="text-ink-800">{c?.name ?? 'Unknown'}</p>
-                          <p className="text-[12px] text-ink-500">{c?.phone ?? ''}</p>
+                          <p className="font-medium text-ink-800">{c?.name ?? 'Unknown'}</p>
+                          <p className="text-[12px] cell-muted">{c?.phone ?? ''}</p>
                         </td>
-                        <td className="table-td whitespace-nowrap text-ink-600">
+                        <td className="table-td whitespace-nowrap cell-muted">
                           {formatDate(s.serviceDate)}
                         </td>
-                        <td className="table-td text-ink-600">
+                        <td className="table-td cell-muted">
                           {[s.product, s.brand].filter(Boolean).join(' · ') || '—'}
                         </td>
-                        <td className="table-td text-right font-medium">
+                        <td className="table-td text-right font-semibold text-ink-900">
                           {formatMoney(s.totalAmount, settings.currency)}
                           {s.balance > 0 && (
-                            <span className="mt-0.5 block text-[11.5px] font-normal text-red-600">
+                            <span className="mt-0.5 block text-[11.5px] font-bold text-rose-700">
                               {formatMoney(s.balance, settings.currency)} due
                             </span>
                           )}
@@ -173,14 +173,14 @@ export default function ServicesPage() {
               </table>
             </div>
 
-            <ul className="divide-y divide-ink-100 lg:hidden">
+            <ul className="divide-y divide-line-soft lg:hidden">
               {slice.map((s) => {
                 const c = customerMap.get(s.customerId)
                 return (
                   <li key={s.id}>
                     <button
                       onClick={() => navigate(`/services/${s.id}`)}
-                      className="w-full px-4 py-3.5 text-left transition-colors active:bg-ink-50"
+                      className="w-full px-3.5 py-3 text-left transition-colors active:bg-brand-50/50"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
@@ -199,7 +199,7 @@ export default function ServicesPage() {
                             {formatMoney(s.totalAmount, settings.currency)}
                           </p>
                           {s.balance > 0 && (
-                            <p className="text-[12px] font-medium text-red-600">
+                            <p className="text-[12px] font-bold text-rose-700">
                               {formatMoney(s.balance, settings.currency)} due
                             </p>
                           )}
@@ -240,11 +240,11 @@ function SummaryTile({
   tone?: 'success' | 'danger'
 }) {
   const color =
-    tone === 'success' ? 'text-emerald-700' : tone === 'danger' ? 'text-red-600' : 'text-ink-900'
+    tone === 'success' ? 'text-emerald-700' : tone === 'danger' ? 'text-rose-700' : 'text-ink-900'
   return (
-    <div className="card p-3">
-      <p className="text-[11.5px] font-medium text-ink-500">{label}</p>
-      <p className={`mt-0.5 truncate text-[15px] font-bold tracking-tight sm:text-lg ${color}`}>
+    <div className="card px-3 py-2.5">
+      <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-500">{label}</p>
+      <p className={`mt-0.5 truncate text-[15px] font-bold tracking-tight tabular sm:text-[17px] ${color}`}>
         {value}
       </p>
     </div>

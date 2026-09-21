@@ -61,7 +61,7 @@ export function GlobalSearch({ variant = 'bar' }: { variant?: 'bar' | 'icon' }) 
     return (
       <button
         onClick={open}
-        className="rounded-xl p-2 text-slate-600 transition-colors hover:bg-slate-100 active:scale-95"
+        className="rounded-md p-2 text-ink-600 transition-colors hover:bg-ink-100"
         aria-label="Search"
       >
         <Search size={20} />
@@ -72,13 +72,11 @@ export function GlobalSearch({ variant = 'bar' }: { variant?: 'bar' | 'icon' }) 
   return (
     <button
       onClick={open}
-      className="group flex w-full items-center gap-2.5 rounded-xl border border-slate-200/90 bg-slate-50/70 px-3.5 py-2 text-left text-sm text-slate-400 transition-all hover:border-brand-500/40 hover:bg-white hover:text-slate-600 hover:shadow-xs focus:outline-none"
+      className="group flex w-full items-center gap-2 rounded-md border border-ink-300 bg-ink-50 px-2.5 py-1.5 text-left text-ink-400 transition-colors hover:border-brand-400 hover:bg-white hover:text-ink-600"
     >
-      <Search size={16} className="shrink-0 text-slate-400 transition-colors group-hover:text-brand-600" />
-      <span className="flex-1 truncate text-xs sm:text-[13px]">
-        Search customers, phone, services, quotes…
-      </span>
-      <kbd className="hidden shrink-0 items-center gap-0.5 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10.5px] font-semibold text-slate-500 shadow-2xs lg:inline-flex">
+      <Search size={14} className="shrink-0 text-ink-400 transition-colors group-hover:text-brand-600" />
+      <span className="flex-1 truncate text-[12.5px]">Search customers, services, quotations…</span>
+      <kbd className="hidden shrink-0 items-center gap-0.5 rounded border border-ink-300 bg-white px-1.5 py-0.5 text-[10.5px] font-semibold text-ink-500 lg:inline-flex">
         <span className="text-[11px]">Ctrl</span> K
       </kbd>
     </button>
@@ -92,7 +90,7 @@ const QUICK_ACTIONS = [
   { label: 'Create Quotation', icon: ScrollText, to: '/quotations/new', tone: 'text-purple-600 bg-purple-50' },
   { label: 'Record Payment', icon: CreditCard, to: '/payments', tone: 'text-teal-600 bg-teal-50' },
   { label: 'Track Expense', icon: Wallet, to: '/expenses', tone: 'text-rose-600 bg-rose-50' },
-  { label: 'Database Backup & Export', icon: Database, to: '/settings?tab=backup', tone: 'text-slate-600 bg-slate-100' },
+  { label: 'Database Backup & Export', icon: Database, to: '/settings?tab=backup', tone: 'text-ink-600 bg-ink-100' },
 ]
 
 function SearchDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -196,13 +194,13 @@ function SearchDialog({ open, onClose }: { open: boolean; onClose: () => void })
   return (
     <div className="fixed inset-0 z-[60] flex items-start justify-center p-3 pt-[8vh] sm:pt-[12vh] no-print">
       <div
-        className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs animate-fade-in"
+        className="absolute inset-0 bg-ink-900/40 backdrop-blur-xs animate-fade-in"
         onClick={onClose}
       />
-      <div className="relative flex max-h-[80vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl border border-slate-200/90 animate-slide-up">
+      <div className="relative flex max-h-[80vh] w-full max-w-xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl border border-ink-200/90 animate-slide-up">
         {/* Search Input */}
-        <div className="flex items-center gap-3 border-b border-slate-200/80 px-4 py-3 bg-slate-50/40">
-          <Search size={18} className="shrink-0 text-slate-400" />
+        <div className="flex items-center gap-3 border-b border-ink-200/80 px-4 py-3 bg-ink-50/40">
+          <Search size={18} className="shrink-0 text-ink-400" />
           <input
             ref={inputRef}
             value={query}
@@ -223,18 +221,18 @@ function SearchDialog({ open, onClose }: { open: boolean; onClose: () => void })
               }
             }}
             placeholder="Type a name, phone number, customer ID or service ID…"
-            className="flex-1 border-0 bg-transparent text-[14.5px] text-slate-900 outline-none placeholder:text-slate-400"
+            className="flex-1 border-0 bg-transparent text-[14.5px] text-ink-900 outline-none placeholder:text-ink-400"
           />
           {query && (
             <button
               onClick={() => setQuery('')}
-              className="rounded-lg p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+              className="rounded-lg p-1 text-ink-400 hover:bg-ink-200 hover:text-ink-700"
               aria-label="Clear query"
             >
               <X size={14} />
             </button>
           )}
-          <kbd className="hidden rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10.5px] font-semibold text-slate-400 sm:inline-block">
+          <kbd className="hidden rounded-md border border-ink-200 bg-white px-1.5 py-0.5 text-[10.5px] font-semibold text-ink-400 sm:inline-block">
             ESC
           </kbd>
         </div>
@@ -243,7 +241,7 @@ function SearchDialog({ open, onClose }: { open: boolean; onClose: () => void })
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
           {!query.trim() ? (
             <div>
-              <div className="flex items-center gap-1.5 px-3 pt-2 pb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              <div className="flex items-center gap-1.5 px-3 pt-2 pb-1.5 text-[11px] font-bold uppercase tracking-wider text-ink-400">
                 <Sparkles size={12} className="text-brand-500" /> Quick Actions & Navigation
               </div>
               <div className="space-y-0.5">
@@ -254,29 +252,29 @@ function SearchDialog({ open, onClose }: { open: boolean; onClose: () => void })
                       key={action.to}
                       onMouseEnter={() => setActive(i)}
                       onClick={() => go({ kind: 'action', to: action.to })}
-                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-all ${
-                        active === i ? 'bg-brand-50 text-brand-900 font-medium' : 'text-slate-700 hover:bg-slate-50'
+                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-all ${
+                        active === i ? 'bg-brand-50 text-brand-900 font-medium' : 'text-ink-700 hover:bg-ink-50'
                       }`}
                     >
                       <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${action.tone}`}>
                         <Icon size={15} />
                       </span>
                       <span className="flex-1">{action.label}</span>
-                      <ArrowRight size={13} className="text-slate-300" />
+                      <ArrowRight size={13} className="text-ink-300" />
                     </button>
                   )
                 })}
               </div>
             </div>
           ) : flat.length === 0 ? (
-            <div className="px-4 py-10 text-center text-sm text-slate-500">
-              No matching records found for <span className="font-semibold text-slate-800">“{query}”</span>.
+            <div className="px-4 py-10 text-center text-sm text-ink-500">
+              No matching records found for <span className="font-semibold text-ink-800">“{query}”</span>.
             </div>
           ) : (
             <div className="space-y-3">
               {results.customers.length > 0 && (
                 <div>
-                  <p className="px-3 pt-1 pb-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  <p className="px-3 pt-1 pb-1 text-[11px] font-bold uppercase tracking-wider text-ink-400">
                     Customers ({results.customers.length})
                   </p>
                   <div className="space-y-0.5">
@@ -285,17 +283,17 @@ function SearchDialog({ open, onClose }: { open: boolean; onClose: () => void })
                         key={c.id}
                         onMouseEnter={() => setActive(i)}
                         onClick={() => go({ kind: 'customer', id: c.id })}
-                        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all ${
-                          active === i ? 'bg-brand-50 ring-1 ring-brand-500/20' : 'hover:bg-slate-50'
+                        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-all ${
+                          active === i ? 'bg-brand-50 ring-1 ring-brand-500/20' : 'hover:bg-ink-50'
                         }`}
                       >
                         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[12px] font-bold text-brand-700">
                           {initials(c.name)}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-semibold text-slate-900">{c.name}</span>
-                          <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[12px] text-slate-500">
-                            <span className="inline-flex items-center gap-1 font-medium text-slate-700">
+                          <span className="block truncate text-sm font-semibold text-ink-900">{c.name}</span>
+                          <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[12px] text-ink-500">
+                            <span className="inline-flex items-center gap-1 font-medium text-ink-700">
                               <Phone size={11} /> {c.phone}
                             </span>
                             <span>·</span>
@@ -304,7 +302,7 @@ function SearchDialog({ open, onClose }: { open: boolean; onClose: () => void })
                             <span className="font-medium text-emerald-700">{formatMoney(c.stats.totalSpent)} total</span>
                           </span>
                         </span>
-                        <User size={14} className="shrink-0 text-slate-300" />
+                        <User size={14} className="shrink-0 text-ink-300" />
                       </button>
                     ))}
                   </div>
@@ -313,7 +311,7 @@ function SearchDialog({ open, onClose }: { open: boolean; onClose: () => void })
 
               {results.services.length > 0 && (
                 <div>
-                  <p className="px-3 pt-1 pb-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  <p className="px-3 pt-1 pb-1 text-[11px] font-bold uppercase tracking-wider text-ink-400">
                     Services ({results.services.length})
                   </p>
                   <div className="space-y-0.5">
@@ -324,20 +322,20 @@ function SearchDialog({ open, onClose }: { open: boolean; onClose: () => void })
                           key={s.id}
                           onMouseEnter={() => setActive(idx)}
                           onClick={() => go({ kind: 'service', id: s.id })}
-                          className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all ${
-                            active === idx ? 'bg-brand-50 ring-1 ring-brand-500/20' : 'hover:bg-slate-50'
+                          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-all ${
+                            active === idx ? 'bg-brand-50 ring-1 ring-brand-500/20' : 'hover:bg-ink-50'
                           }`}
                         >
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-ink-100 text-ink-600">
                             <Wrench size={15} />
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-semibold text-slate-900">
-                              {s.serviceType} <span className="text-xs font-normal text-slate-500">· {s.code}</span>
+                            <span className="block truncate text-sm font-semibold text-ink-900">
+                              {s.serviceType} <span className="text-xs font-normal text-ink-500">· {s.code}</span>
                             </span>
-                            <span className="mt-0.5 block truncate text-[12px] text-slate-500">
+                            <span className="mt-0.5 block truncate text-[12px] text-ink-500">
                               {customerMap.get(s.customerId)?.name ?? 'Unknown customer'} ·{' '}
-                              {formatDate(s.serviceDate)} · <span className="font-medium text-slate-800">{formatMoney(s.totalAmount)}</span>
+                              {formatDate(s.serviceDate)} · <span className="font-medium text-ink-800">{formatMoney(s.totalAmount)}</span>
                             </span>
                           </span>
                         </button>
@@ -349,7 +347,7 @@ function SearchDialog({ open, onClose }: { open: boolean; onClose: () => void })
 
               {results.quotations.length > 0 && (
                 <div>
-                  <p className="px-3 pt-1 pb-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  <p className="px-3 pt-1 pb-1 text-[11px] font-bold uppercase tracking-wider text-ink-400">
                     Quotations ({results.quotations.length})
                   </p>
                   <div className="space-y-0.5">
@@ -360,17 +358,17 @@ function SearchDialog({ open, onClose }: { open: boolean; onClose: () => void })
                           key={qu.id}
                           onMouseEnter={() => setActive(idx)}
                           onClick={() => go({ kind: 'quote', id: qu.id })}
-                          className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all ${
-                            active === idx ? 'bg-brand-50 ring-1 ring-brand-500/20' : 'hover:bg-slate-50'
+                          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-all ${
+                            active === idx ? 'bg-brand-50 ring-1 ring-brand-500/20' : 'hover:bg-ink-50'
                           }`}
                         >
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-purple-50 text-purple-600">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-50 text-purple-600">
                             <ScrollText size={15} />
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-semibold text-slate-900">{qu.code}</span>
-                            <span className="mt-0.5 block truncate text-[12px] text-slate-500">
-                              {formatDate(qu.date)} · <span className="font-medium text-slate-800">{formatMoney(qu.totalAmount)}</span>
+                            <span className="block truncate text-sm font-semibold text-ink-900">{qu.code}</span>
+                            <span className="mt-0.5 block truncate text-[12px] text-ink-500">
+                              {formatDate(qu.date)} · <span className="font-medium text-ink-800">{formatMoney(qu.totalAmount)}</span>
                             </span>
                           </span>
                         </button>
@@ -384,7 +382,7 @@ function SearchDialog({ open, onClose }: { open: boolean; onClose: () => void })
         </div>
 
         {/* Footer hints */}
-        <div className="flex items-center justify-between border-t border-slate-200/80 bg-slate-50/70 px-4 py-2 text-[11px] text-slate-400">
+        <div className="flex items-center justify-between border-t border-ink-200/80 bg-ink-50/70 px-4 py-2 text-[11px] text-ink-400">
           <div className="flex items-center gap-3">
             <span><kbd className="rounded border bg-white px-1 py-0.5 text-[10px]">↑↓</kbd> to navigate</span>
             <span><kbd className="rounded border bg-white px-1 py-0.5 text-[10px]">↵</kbd> to select</span>

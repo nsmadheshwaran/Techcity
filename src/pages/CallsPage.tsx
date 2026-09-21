@@ -180,11 +180,11 @@ export default function CallsPage() {
     setStatus(status === value ? 'all' : value)
 
   const statusChip = (value: 'all' | CallStatus) => {
-    const base = 'rounded-lg border px-2.5 py-1.5 text-[12px] font-semibold transition-colors'
+    const base = 'rounded-md border px-2.5 py-1 text-[12px] font-semibold transition-colors'
     if (value === 'all')
       return `${base} ${
         status === 'all'
-          ? 'border-ink-900 bg-ink-900 text-white'
+          ? 'border-brand-600 bg-brand-600 text-white'
           : 'border-ink-300 bg-white text-ink-600 hover:bg-ink-50'
       }`
     return `${base} ${status === value ? STATUS_ACTIVE[value] : STATUS_STYLES[value]}`
@@ -222,7 +222,7 @@ export default function CallsPage() {
       </div>
 
       {/* Filter bar */}
-      <div className="card mb-4 space-y-2.5 p-3">
+      <div className="card mb-3.5 space-y-2 px-3 py-2">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-0 flex-1 basis-52">
             <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
@@ -248,7 +248,7 @@ export default function CallsPage() {
             <button
               type="button"
               className={`inline-flex items-center gap-1.5 px-3 py-2 text-[12.5px] font-medium transition-colors ${
-                view === 'list' ? 'bg-ink-900 text-white' : 'bg-white text-ink-600 hover:bg-ink-50'
+                view === 'list' ? 'bg-brand-600 text-white' : 'bg-white text-ink-600 hover:bg-ink-50'
               }`}
               onClick={() => setView('list')}
             >
@@ -257,7 +257,7 @@ export default function CallsPage() {
             <button
               type="button"
               className={`inline-flex items-center gap-1.5 border-l border-ink-300 px-3 py-2 text-[12.5px] font-medium transition-colors ${
-                view === 'call' ? 'bg-ink-900 text-white' : 'bg-white text-ink-600 hover:bg-ink-50'
+                view === 'call' ? 'bg-brand-600 text-white' : 'bg-white text-ink-600 hover:bg-ink-50'
               }`}
               onClick={() => setView('call')}
             >
@@ -306,7 +306,7 @@ export default function CallsPage() {
             message="Book the first enquiry — online, direct walk-in or demo — so no lead is forgotten."
             action={
               <button className="btn-primary" onClick={() => setModalOpen(true)}>
-                <Plus size={16} /> Book your first call
+                <Plus size={14} /> Book your first call
               </button>
             }
           />
@@ -330,21 +330,21 @@ export default function CallsPage() {
       ) : (
         <>
           {/* Desktop table */}
-          <div className="card hidden overflow-x-auto md:block">
+          <div className="panel hidden overflow-x-auto md:block">
             <table className="w-full">
-              <thead className="bg-ink-900 text-white">
+              <thead>
                 <tr>
-                  <th className="table-th text-white">S.No</th>
-                  <th className="table-th text-white">Booked</th>
-                  <th className="table-th text-white">Customer</th>
-                  <th className="table-th text-white">Mobile</th>
-                  <th className="table-th text-white">Priority</th>
-                  <th className="table-th text-white">Issue</th>
-                  <th className="table-th text-white">Status</th>
-                  <th className="table-th text-right text-white">Actions</th>
+                  <th className="table-th">S.No</th>
+                  <th className="table-th">Booked</th>
+                  <th className="table-th">Customer</th>
+                  <th className="table-th">Mobile</th>
+                  <th className="table-th">Priority</th>
+                  <th className="table-th">Issue</th>
+                  <th className="table-th">Status</th>
+                  <th className="table-th text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-ink-100">
+              <tbody className="divide-y divide-line-soft">
                 {filtered.map((c, idx) => {
                   const linked = c.customerId ? customerMap.get(c.customerId) : undefined
                   return (
@@ -633,7 +633,7 @@ function CallView({
             </button>
 
             {open && (
-              <ul className="divide-y divide-ink-100 border-t border-ink-100">
+              <ul className="divide-y divide-line-soft border-t border-ink-100">
                 {g.calls.map((c) => (
                   <li key={c.id} className="px-4 py-3">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">

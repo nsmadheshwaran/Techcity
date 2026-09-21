@@ -11,11 +11,11 @@ import {
   Pencil,
   Plus,
   ScrollText,
-  Search,
   Trash2,
-  X,
 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
+import { StatCard } from '@/components/StatCard'
+import { ListToolbar, SearchInput, ViewTabs } from '@/components/ui/ListToolbar'
 import { EmptyState } from '@/components/ui/States'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useToast } from '@/components/ui/Toast'
@@ -147,104 +147,60 @@ export default function QuotationsPage() {
         subtitle="Manage estimates, share quotes via WhatsApp or PDF, and convert to active jobs with 1 click"
         actions={
           <Link className="btn-primary" to="/quotations/new">
-            <Plus size={16} /> New Quotation
+            <Plus size={14} /> New Quotation
           </Link>
         }
       />
 
-      {/* CRM Pipeline Stat Strip */}
-      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="card p-4 flex items-center gap-3.5 border-l-4 border-l-brand-500">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
-            <FileText size={18} />
-          </span>
-          <div>
-            <p className="text-[11.5px] font-semibold uppercase tracking-wider text-ink-400">Total Pipeline</p>
-            <p className="text-lg font-bold text-ink-900 leading-tight">
-              {formatMoney(stats.totalValue, settings.currency)}
-            </p>
-            <p className="text-[11.5px] text-ink-500 mt-0.5">{stats.totalCount} quotation{stats.totalCount === 1 ? '' : 's'}</p>
-          </div>
-        </div>
-
-        <div className="card p-4 flex items-center gap-3.5 border-l-4 border-l-emerald-500">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-            <CheckCircle2 size={18} />
-          </span>
-          <div>
-            <p className="text-[11.5px] font-semibold uppercase tracking-wider text-ink-400">Accepted Won</p>
-            <p className="text-lg font-bold text-emerald-700 leading-tight">
-              {formatMoney(stats.acceptedValue, settings.currency)}
-            </p>
-            <p className="text-[11.5px] text-ink-500 mt-0.5">{stats.acceptedCount} converted</p>
-          </div>
-        </div>
-
-        <div className="card p-4 flex items-center gap-3.5 border-l-4 border-l-blue-500">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-            <Clock size={18} />
-          </span>
-          <div>
-            <p className="text-[11.5px] font-semibold uppercase tracking-wider text-ink-400">Pending / In Review</p>
-            <p className="text-lg font-bold text-blue-700 leading-tight">
-              {formatMoney(stats.pendingValue, settings.currency)}
-            </p>
-            <p className="text-[11.5px] text-ink-500 mt-0.5">{stats.pendingCount} awaiting response</p>
-          </div>
-        </div>
+      {/* Pipeline KPIs — same tile component the dashboard uses */}
+      <div className="mb-3.5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <StatCard
+          label="Total Pipeline"
+          value={formatMoney(stats.totalValue, settings.currency)}
+          icon={FileText}
+          tone="brand"
+          hint={`${stats.totalCount} quotation${stats.totalCount === 1 ? '' : 's'}`}
+        />
+        <StatCard
+          label="Accepted / Won"
+          value={formatMoney(stats.acceptedValue, settings.currency)}
+          icon={CheckCircle2}
+          tone="success"
+          hint={`${stats.acceptedCount} converted`}
+        />
+        <StatCard
+          label="Pending / In Review"
+          value={formatMoney(stats.pendingValue, settings.currency)}
+          icon={Clock}
+          tone="warning"
+          hint={`${stats.pendingCount} awaiting response`}
+        />
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="card mb-4 p-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="relative min-w-[240px] flex-1">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
-          <input
-            className="input pl-9 pr-8 py-1.5 text-sm w-full"
-            placeholder="Search quotation no., customer, phone, item…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+      <div className="panel">
+        <ListToolbar>
+          <ViewTabs
+            value={status}
+            onChange={setStatus}
+            options={[
+              { key: 'all' as const, label: 'All', count: stats.totalCount },
+              ...QUOTATION_STATUSES.map((sVal) => ({
+                key: sVal,
+                label: sVal,
+                count: (quotations ?? []).filter((q) => q.status === sVal).length,
+              })),
+            ]}
           />
-          {query && (
-            <button
-              onClick={() => setQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-400 hover:text-ink-600"
-              aria-label="Clear search"
-            >
-              <X size={14} />
-            </button>
-          )}
-        </div>
+          <SearchInput
+            className="w-full sm:w-72"
+            value={query}
+            onChange={setQuery}
+            placeholder="Search quotation no., customer, phone, item…"
+            ariaLabel="Search quotations"
+          />
+        </ListToolbar>
 
-        {/* Status segment pills */}
-        <div className="flex items-center gap-1 overflow-x-auto">
-          <button
-            onClick={() => setStatus('all')}
-            className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-all ${
-              status === 'all'
-                ? 'bg-ink-900 text-white shadow-sm'
-                : 'text-ink-600 hover:bg-ink-100'
-            }`}
-          >
-            All
-          </button>
-          {QUOTATION_STATUSES.map((s) => (
-            <button
-              key={s}
-              onClick={() => setStatus(s)}
-              className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-all ${
-                status === s
-                  ? 'bg-ink-900 text-white shadow-sm'
-                  : 'text-ink-600 hover:bg-ink-100'
-              }`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {!filtered.length ? (
-        <div className="card">
+        {!filtered.length ? (
           <EmptyState
             icon={ScrollText}
             title={query || status !== 'all' ? 'No quotations match' : 'No quotations yet'}
@@ -256,24 +212,23 @@ export default function QuotationsPage() {
             action={
               !query && status === 'all' ? (
                 <Link className="btn-primary" to="/quotations/new">
-                  <Plus size={16} /> Create your first quotation
+                  <Plus size={14} /> Create your first quotation
                 </Link>
               ) : undefined
             }
           />
-        </div>
-      ) : (
-        <ul className="space-y-3">
+        ) : (
+          <ul className="divide-y divide-line-soft">
           {filtered.map((qu) => {
             const conf = STATUS_CONFIG[qu.status] ?? STATUS_CONFIG.Draft
             return (
               <li
                 key={qu.id}
-                className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between transition-all duration-200 hover:border-ink-300 hover:shadow-md"
+                className="flex flex-col gap-3 px-3.5 py-3 transition-colors hover:bg-brand-50/40 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="flex items-start gap-3.5 min-w-0 flex-1">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-brand-100">
-                    <FileText size={20} />
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-brand-50 text-brand-600">
+                    <FileText size={17} />
                   </span>
 
                   <div className="min-w-0 flex-1">
@@ -411,8 +366,9 @@ export default function QuotationsPage() {
               </li>
             )
           })}
-        </ul>
-      )}
+          </ul>
+        )}
+      </div>
     </>
   )
 }
