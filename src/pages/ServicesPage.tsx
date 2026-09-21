@@ -1,21 +1,31 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Download, Plus, Wrench } from 'lucide-react'
+import { Download, Plus, Trash2, Wrench } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { ServiceFilters, type FilterState } from '@/components/services/ServiceFilters'
 import { applyFilters, EMPTY_FILTERS } from '@/components/services/serviceFiltersHelper'
 import { PaymentBadge, StatusBadge } from '@/components/ui/Badges'
+import { BulkBar, RowCheckbox, SelectAllCheckbox } from '@/components/ui/BulkBar'
 import { EmptyState, SkeletonRows } from '@/components/ui/States'
 import { Pagination } from '@/components/ui/Pagination'
+import { SortableTh } from '@/components/ui/SortableTh'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { usePagination } from '@/components/ui/usePagination'
+import { useSelection } from '@/components/ui/useSelection'
+import { useSort, useSorted } from '@/components/ui/useSort'
 import { useToast } from '@/components/ui/Toast'
 import { useCustomerMap, useServices, useSettings } from '@/hooks/useData'
 import { exportServicesCSV } from '@/services/backup'
+import { deleteService, setServiceStatus } from '@/services/services'
+import { SERVICE_STATUSES } from '@/types'
 import { formatDate, formatMoney } from '@/utils/format'
+
+type ServiceSortKey = 'type' | 'customer' | 'date' | 'total' | 'payment' | 'status'
 
 export default function ServicesPage() {
   const navigate = useNavigate()
   const toast = useToast()
+  const confirm = useConfirm()
   const services = useServices()
   const customerMap = useCustomerMap()
   const settings = useSettings()
@@ -30,12 +40,63 @@ export default function ServicesPage() {
     [services],
   )
 
-  const filtered = useMemo(
+  const matched = useMemo(
     () => applyFilters(services ?? [], filters, (id) => customerMap.get(id)),
     [services, filters, customerMap],
   )
 
+  const sort = useSort<ServiceSortKey>()
+  const filtered = useSorted(matched, sort.key, sort.dir, {
+    type: (s) => s.serviceType,
+    customer: (s) => customerMap.get(s.customerId)?.name,
+    date: (s) => s.serviceDate,
+    total: (s) => s.totalAmount,
+    payment: (s) => s.paymentStatus,
+    status: (s) => s.status,
+  })
+
   const { page, setPage, pageCount, total, slice, pageSize } = usePagination(filtered, 20)
+
+  const visibleIds = useMemo(() => slice.map((s) => s.id), [slice])
+  const selection = useSelection(visibleIds)
+
+  const [bulkBusy, setBulkBusy] = useState(false)
+
+  /** Applies a mutation to each selected row, reporting one summary toast. */
+  async function runBulk(label: string, fn: (id: string) => Promise<unknown>) {
+    const ids = selection.selectedIds
+    if (!ids.length) return
+    setBulkBusy(true)
+    let done = 0
+    const failures: string[] = []
+    for (const id of ids) {
+      try {
+        await fn(id)
+        done += 1
+      } catch (err) {
+        failures.push(err instanceof Error ? err.message : 'Unknown error')
+      }
+    }
+    setBulkBusy(false)
+    selection.clear()
+    if (failures.length) {
+      toast.error(`${label} partly failed`, `${done} updated, ${failures.length} failed. ${failures[0]}`)
+    } else {
+      toast.success(label, `${done} service${done === 1 ? '' : 's'} updated.`)
+    }
+  }
+
+  async function onBulkDelete() {
+    const n = selection.count
+    const ok = await confirm({
+      title: `Delete ${n} service${n === 1 ? '' : 's'}?`,
+      message: `The selected service record${n === 1 ? '' : 's'}, along with ${n === 1 ? 'its' : 'their'} parts and payments, will be permanently deleted. This cannot be undone.`,
+      confirmLabel: `Delete ${n} service${n === 1 ? '' : 's'}`,
+      danger: true,
+    })
+    if (!ok) return
+    await runBulk('Services deleted', deleteService)
+  }
 
   const totals = useMemo(
     () => ({
@@ -91,6 +152,37 @@ export default function ServicesPage() {
       <div className="panel">
         <ServiceFilters filters={filters} onChange={setFilters} serviceTypes={serviceTypes} />
 
+        <BulkBar count={selection.count} noun="service" onClear={selection.clear}>
+          <select
+            className="input w-auto py-1.5 text-[12.5px] font-medium"
+            value=""
+            disabled={bulkBusy}
+            onChange={(e) => {
+              const next = e.target.value
+              if (!next) return
+              e.target.value = ''
+              void runBulk(`Status set to ${next}`, (id) =>
+                setServiceStatus(id, next as (typeof SERVICE_STATUSES)[number]),
+              )
+            }}
+            aria-label="Set status for selected services"
+          >
+            <option value="">Set status…</option>
+            {SERVICE_STATUSES.map((st) => (
+              <option key={st} value={st}>
+                {st}
+              </option>
+            ))}
+          </select>
+          <button
+            className="btn-secondary text-red-600 hover:border-red-300 hover:bg-red-50"
+            onClick={onBulkDelete}
+            disabled={bulkBusy}
+          >
+            <Trash2 size={13} /> Delete
+          </button>
+        </BulkBar>
+
         {!services ? (
           <SkeletonRows rows={6} cols={5} />
         ) : filtered.length === 0 ? (
@@ -120,13 +212,21 @@ export default function ServicesPage() {
               <table className="w-full">
                 <thead>
                   <tr>
-                    <th className="table-th">Service</th>
-                    <th className="table-th">Customer</th>
-                    <th className="table-th">Date</th>
+                    <th className="table-th w-9">
+                      <SelectAllCheckbox
+                        checked={selection.allVisibleSelected}
+                        indeterminate={selection.someVisibleSelected}
+                        onChange={selection.toggleAllVisible}
+                        label="Select all services on this page"
+                      />
+                    </th>
+                    <SortableTh label="Service" column="type" active={sort.key} dir={sort.dir} onSort={sort.toggle} />
+                    <SortableTh label="Customer" column="customer" active={sort.key} dir={sort.dir} onSort={sort.toggle} />
+                    <SortableTh label="Date" column="date" active={sort.key} dir={sort.dir} onSort={sort.toggle} />
                     <th className="table-th">Device</th>
-                    <th className="table-th text-right">Total</th>
-                    <th className="table-th">Payment</th>
-                    <th className="table-th">Status</th>
+                    <SortableTh label="Total" column="total" active={sort.key} dir={sort.dir} onSort={sort.toggle} align="right" />
+                    <SortableTh label="Payment" column="payment" active={sort.key} dir={sort.dir} onSort={sort.toggle} />
+                    <SortableTh label="Status" column="status" active={sort.key} dir={sort.dir} onSort={sort.toggle} />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line-soft">
@@ -136,8 +236,15 @@ export default function ServicesPage() {
                       <tr
                         key={s.id}
                         onClick={() => navigate(`/services/${s.id}`)}
-                        className="table-row-link"
+                        className={`table-row-link ${selection.isSelected(s.id) ? 'bg-brand-50/70' : ''}`}
                       >
+                        <td className="table-td" onClick={(e) => e.stopPropagation()}>
+                          <RowCheckbox
+                            checked={selection.isSelected(s.id)}
+                            onChange={() => selection.toggle(s.id)}
+                            label={`Select ${s.code}`}
+                          />
+                        </td>
                         <td className="table-td">
                           <p className="cell-primary">{s.serviceType}</p>
                           <span className="code-chip">{s.code}</span>

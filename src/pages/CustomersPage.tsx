@@ -6,20 +6,28 @@ import {
   MapPin,
   MessageCircle,
   Phone,
+  Trash2,
   UserPlus,
   Users,
 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { CustomerFormModal } from '@/components/customers/CustomerFormModal'
+import { BulkBar, RowCheckbox, SelectAllCheckbox } from '@/components/ui/BulkBar'
 import { EmptyState, SkeletonRows } from '@/components/ui/States'
 import { ListToolbar, SearchInput, ViewTabs } from '@/components/ui/ListToolbar'
 import { Pagination } from '@/components/ui/Pagination'
+import { SortableTh } from '@/components/ui/SortableTh'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { usePagination } from '@/components/ui/usePagination'
+import { useSelection } from '@/components/ui/useSelection'
+import { useSort, useSorted } from '@/components/ui/useSort'
 import { useToast } from '@/components/ui/Toast'
 import { useCustomersWithStats, useSettings } from '@/hooks/useData'
-import { searchCustomers } from '@/services/customers'
+import { deleteCustomer, searchCustomers } from '@/services/customers'
 import { exportCustomersCSV } from '@/services/backup'
 import { formatDate, formatMoney, initials, toWhatsAppNumber } from '@/utils/format'
+
+type CustomerSortKey = 'name' | 'phone' | 'city' | 'services' | 'spent' | 'outstanding' | 'last'
 
 type SortKey = 'recent' | 'name' | 'spend' | 'services'
 type SegmentFilter = 'all' | 'balance' | 'repeat' | 'recent'
@@ -27,6 +35,7 @@ type SegmentFilter = 'all' | 'balance' | 'repeat' | 'recent'
 export default function CustomersPage() {
   const navigate = useNavigate()
   const toast = useToast()
+  const confirm = useConfirm()
   const customers = useCustomersWithStats()
   const settings = useSettings()
   const [query, setQuery] = useState('')
@@ -63,7 +72,53 @@ export default function CustomersPage() {
     return sorted
   }, [customers, query, sort, segment])
 
-  const { page, setPage, pageCount, total, slice, pageSize } = usePagination(filtered, 20)
+  const sortCol = useSort<CustomerSortKey>()
+  const sorted = useSorted(filtered, sortCol.key, sortCol.dir, {
+    name: (c) => c.name,
+    phone: (c) => c.phone,
+    city: (c) => c.city,
+    services: (c) => c.stats.totalServices,
+    spent: (c) => c.stats.totalSpent,
+    outstanding: (c) => c.stats.outstanding,
+    last: (c) => c.stats.lastServiceDate,
+  })
+
+  const { page, setPage, pageCount, total, slice, pageSize } = usePagination(sorted, 20)
+
+  const visibleIds = useMemo(() => slice.map((c) => c.id), [slice])
+  const selection = useSelection(visibleIds)
+  const [bulkBusy, setBulkBusy] = useState(false)
+
+  async function onBulkDelete() {
+    const ids = selection.selectedIds
+    const n = ids.length
+    if (!n) return
+    const ok = await confirm({
+      title: `Delete ${n} customer${n === 1 ? '' : 's'}?`,
+      message: `Every linked service, payment, equipment record and reminder will be permanently deleted too. This cannot be undone.`,
+      confirmLabel: `Delete ${n} customer${n === 1 ? '' : 's'}`,
+      danger: true,
+    })
+    if (!ok) return
+    setBulkBusy(true)
+    let done = 0
+    const failures: string[] = []
+    for (const id of ids) {
+      try {
+        await deleteCustomer(id)
+        done += 1
+      } catch (err) {
+        failures.push(err instanceof Error ? err.message : 'Unknown error')
+      }
+    }
+    setBulkBusy(false)
+    selection.clear()
+    if (failures.length) {
+      toast.error('Delete partly failed', `${done} deleted, ${failures.length} failed. ${failures[0]}`)
+    } else {
+      toast.success('Customers deleted', `${done} record${done === 1 ? '' : 's'} removed.`)
+    }
+  }
 
   async function onExport() {
     try {
@@ -132,7 +187,7 @@ export default function CustomersPage() {
           />
 
           <select
-            className="input w-full py-1.5 text-[12.5px] font-medium sm:w-44"
+            className="input w-full py-1.5 text-[12.5px] font-medium sm:w-44 lg:hidden"
             value={sort}
             onChange={(e) => setSort(e.target.value as SortKey)}
             aria-label="Sort customers"
@@ -143,6 +198,16 @@ export default function CustomersPage() {
             <option value="services">Most services</option>
           </select>
         </ListToolbar>
+
+        <BulkBar count={selection.count} noun="customer" onClear={selection.clear}>
+          <button
+            className="btn-secondary text-red-600 hover:border-red-300 hover:bg-red-50"
+            onClick={onBulkDelete}
+            disabled={bulkBusy}
+          >
+            <Trash2 size={13} /> Delete
+          </button>
+        </BulkBar>
 
         {!customers ? (
           <SkeletonRows rows={8} cols={5} />
@@ -180,14 +245,22 @@ export default function CustomersPage() {
               <table className="w-full">
                 <thead>
                   <tr>
-                    <th className="table-th">Customer</th>
-                    <th className="table-th">Contact</th>
+                    <th className="table-th w-9">
+                      <SelectAllCheckbox
+                        checked={selection.allVisibleSelected}
+                        indeterminate={selection.someVisibleSelected}
+                        onChange={selection.toggleAllVisible}
+                        label="Select all customers on this page"
+                      />
+                    </th>
+                    <SortableTh label="Customer" column="name" active={sortCol.key} dir={sortCol.dir} onSort={sortCol.toggle} />
+                    <SortableTh label="Contact" column="phone" active={sortCol.key} dir={sortCol.dir} onSort={sortCol.toggle} />
                     <th className="table-th">Connect</th>
-                    <th className="table-th">City</th>
-                    <th className="table-th text-center">Services</th>
-                    <th className="table-th text-right">Total Spent</th>
-                    <th className="table-th text-right">Outstanding</th>
-                    <th className="table-th">Last Service</th>
+                    <SortableTh label="City" column="city" active={sortCol.key} dir={sortCol.dir} onSort={sortCol.toggle} />
+                    <SortableTh label="Services" column="services" active={sortCol.key} dir={sortCol.dir} onSort={sortCol.toggle} align="center" />
+                    <SortableTh label="Total Spent" column="spent" active={sortCol.key} dir={sortCol.dir} onSort={sortCol.toggle} align="right" />
+                    <SortableTh label="Outstanding" column="outstanding" active={sortCol.key} dir={sortCol.dir} onSort={sortCol.toggle} align="right" />
+                    <SortableTh label="Last Service" column="last" active={sortCol.key} dir={sortCol.dir} onSort={sortCol.toggle} />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line-soft">
@@ -195,8 +268,15 @@ export default function CustomersPage() {
                     <tr
                       key={c.id}
                       onClick={() => navigate(`/customers/${c.id}`)}
-                      className="table-row-link"
+                      className={`table-row-link ${selection.isSelected(c.id) ? 'bg-brand-50/70' : ''}`}
                     >
+                      <td className="table-td" onClick={(e) => e.stopPropagation()}>
+                        <RowCheckbox
+                          checked={selection.isSelected(c.id)}
+                          onChange={() => selection.toggle(c.id)}
+                          label={`Select ${c.name}`}
+                        />
+                      </td>
                       <td className="table-td">
                         <div className="flex items-center gap-2.5">
                           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-[11px] font-bold text-brand-700 ring-1 ring-brand-100">

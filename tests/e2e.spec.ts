@@ -298,8 +298,12 @@ test('Dashboard statistics are computed from real data', async ({ page }) => {
   expect(completedBadges).toBeGreaterThan(0)
   await page.getByLabel('Filter by service type').selectOption('CCTV Installation')
   await page.waitForTimeout(800)
-  // Every visible row should now be a CCTV Installation
-  const rowTypes = await page.locator('tbody tr td:first-child p:first-child').allTextContents()
+  // Every visible row should now be a CCTV Installation.
+  // The first cell is the bulk-selection checkbox, so the service type is the
+  // second column — target it by its cell rather than by row position.
+  const rowTypes = await page
+    .locator('tbody tr td:nth-child(2) p.cell-primary')
+    .allTextContents()
   expect(rowTypes.length).toBeGreaterThan(0)
   expect(rowTypes.every((t) => t.trim() === 'CCTV Installation')).toBe(true)
   console.log(`✓ Service filters work (${rowTypes.length} CCTV Installation rows)`)

@@ -7,6 +7,8 @@ import { EquipmentBadge } from '@/components/ui/Badges'
 import { EmptyState, SkeletonRows } from '@/components/ui/States'
 import { ListToolbar, SearchInput } from '@/components/ui/ListToolbar'
 import { Pagination } from '@/components/ui/Pagination'
+import { SortableTh } from '@/components/ui/SortableTh'
+import { useSort, useSorted } from '@/components/ui/useSort'
 import { usePagination } from '@/components/ui/usePagination'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useToast } from '@/components/ui/Toast'
@@ -15,6 +17,8 @@ import { deleteEquipment } from '@/services/equipment'
 import { exportEquipmentCSV } from '@/services/backup'
 import { EQUIPMENT_STATUSES, type Equipment } from '@/types'
 import { daysUntil, formatDate } from '@/utils/format'
+
+type EquipmentSortKey = 'product' | 'customer' | 'serial' | 'installed' | 'warranty' | 'status'
 
 export default function EquipmentPage() {
   const equipment = useEquipment()
@@ -40,7 +44,17 @@ export default function EquipmentPage() {
     })
   }, [equipment, query, status, customerMap])
 
-  const { page, setPage, pageCount, total, slice, pageSize } = usePagination(filtered, 20)
+  const sort = useSort<EquipmentSortKey>()
+  const sorted = useSorted(filtered, sort.key, sort.dir, {
+    product: (e) => [e.productType, e.brand, e.model].filter(Boolean).join(' '),
+    customer: (e) => customerMap.get(e.customerId)?.name,
+    serial: (e) => e.serialNumber,
+    installed: (e) => e.installationDate,
+    warranty: (e) => e.warrantyExpiry,
+    status: (e) => e.status,
+  })
+
+  const { page, setPage, pageCount, total, slice, pageSize } = usePagination(sorted, 20)
 
   async function onDelete(e: Equipment) {
     const ok = await confirm({
@@ -149,12 +163,12 @@ export default function EquipmentPage() {
               <table className="w-full">
                 <thead>
                   <tr>
-                    <th className="table-th">Product</th>
-                    <th className="table-th">Customer</th>
-                    <th className="table-th">Serial / Location</th>
-                    <th className="table-th">Installed</th>
-                    <th className="table-th">Warranty</th>
-                    <th className="table-th">Status</th>
+                    <SortableTh label="Product" column="product" active={sort.key} dir={sort.dir} onSort={sort.toggle} />
+                    <SortableTh label="Customer" column="customer" active={sort.key} dir={sort.dir} onSort={sort.toggle} />
+                    <SortableTh label="Serial / Location" column="serial" active={sort.key} dir={sort.dir} onSort={sort.toggle} />
+                    <SortableTh label="Installed" column="installed" active={sort.key} dir={sort.dir} onSort={sort.toggle} />
+                    <SortableTh label="Warranty" column="warranty" active={sort.key} dir={sort.dir} onSort={sort.toggle} />
+                    <SortableTh label="Status" column="status" active={sort.key} dir={sort.dir} onSort={sort.toggle} />
                     <th className="table-th text-right">Actions</th>
                   </tr>
                 </thead>
