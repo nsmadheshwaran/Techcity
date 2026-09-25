@@ -245,6 +245,7 @@ create table if not exists public.business_settings (
 create or replace function public.recalculate_service_totals()
 returns trigger
 language plpgsql
+set search_path = public, pg_temp
 as $$
 declare
   subtotal numeric(12,2);
@@ -272,6 +273,7 @@ create trigger services_totals
 create or replace function public.sync_service_amount_paid()
 returns trigger
 language plpgsql
+set search_path = public, pg_temp
 as $$
 declare
   target uuid := coalesce(new.service_id, old.service_id);
@@ -291,7 +293,7 @@ create trigger payments_sync
 
 -- Generic updated_at maintenance
 create or replace function public.touch_updated_at()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql set search_path = public, pg_temp as $$
 begin new.updated_at := now(); return new; end; $$;
 
 do $$
@@ -338,81 +340,6 @@ create policy "settings_owner_all" on public.business_settings
   using (owner_id = auth.uid())
   with check (owner_id = auth.uid());
 
--- =====================================================================
---  Handy reporting views
--- =====================================================================
-create or replace view public.upcoming_reminders as
-select r.*, c.name as customer_name, c.phone as customer_phone
-from public.reminders r
-join public.customers c on c.id = r.customer_id
-where r.done = false
-order by r.due_date;
-
--- =====================================================================
---  v3 additions (contacts table + customer/service columns)
--- =====================================================================
-
-create table if not exists public.customer_contacts (
-  id            uuid primary key default gen_random_uuid(),
-  owner_id      uuid not null default auth.uid() references auth.users (id) on delete cascade,
-  customer_id   uuid not null references public.customers (id) on delete cascade,
-  position      integer not null default 0,
-  name          text not null,
-  phone         text not null,
-  role          text,
-  is_demo       boolean not null default false,
-  created_at    timestamptz not null default now(),
-  updated_at    timestamptz not null default now()
-);
-
-create index if not exists customer_contacts_customer_idx on public.customer_contacts (customer_id);
-create index if not exists customer_contacts_position_idx on public.customer_contacts (customer_id, position);
-
--- Add new columns to customers (idempotent)
-do $$
-begin
-  if not exists (select 1 from information_schema.columns where table_name='customers' and column_name='gst_number') then
-    alter table public.customers add column gst_number text;
-  end if;
-  if not exists (select 1 from information_schema.columns where table_name='customers' and column_name='password') then
-    alter table public.customers add column password text;
-  end if;
-  if not exists (select 1 from information_schema.columns where table_name='services' and column_name='service_mode') then
-    alter table public.services add column service_mode text not null default 'Offline'
-      check (service_mode in ('Offline','Online'));
-  end if;
-end $$;
-
--- RLS for contacts
-alter table public.customer_contacts enable row level security;
-
-drop policy if exists "customer_contacts_owner_all" on public.customer_contacts;
-create policy "customer_contacts_owner_all" on public.customer_contacts
-  for all to authenticated
-  using      (owner_id = auth.uid())
-  with check  (owner_id = auth.uid());
-
--- Extend the reporting view (drop + recreate so this file stays safe to re-run)
-drop view if exists public.customer_summary;
-create view public.customer_summary as
-select
-  c.id,
-  c.owner_id,
-  c.code,
-  c.name,
-  c.phone,
-  c.gst_number,
-  count(s.id)                                      as total_services,
-  coalesce(sum(s.total_amount), 0)                 as total_spent,
-  coalesce(sum(s.amount_paid), 0)                  as total_paid,
-  greatest(0, coalesce(sum(s.balance), 0))         as outstanding,
-  max(s.service_date)                              as last_service_date,
-  min(s.next_service_date) filter (where s.next_service_date >= current_date)
-                                                   as next_service_date
-from public.customers c
-left join public.services s
-       on s.customer_id = c.id and s.status <> 'Cancelled'
-group by c.id;
 
 -- =====================================================================
 --  CLOUD SYNC ADDENDUM (schema v4/v5)
@@ -441,6 +368,8 @@ alter table public.service_parts     add column if not exists photo_data_url  te
 alter table public.customers         add column if not exists distance_km     numeric(7,2);
 alter table public.calls             add column if not exists distance_km     numeric(7,2);
 alter table public.business_settings add column if not exists alt_phone       text;
+alter table public.service_parts     add column if not exists is_demo         boolean not null default false;
+alter table public.payments          add column if not exists is_demo         boolean not null default false;
 
 -- ---------------------------------------------------------------------
 -- service_visits (log of every physical trip to a customer's location)
@@ -596,3 +525,52 @@ create policy "counters_owner_all" on public.counters
   for all to authenticated
   using     (owner_id = auth.uid())
   with check (owner_id = auth.uid());
+
+-- =====================================================================
+--  REPORTING VIEWS
+--  Defined LAST, on purpose. customer_summary reads customers.gst_number,
+--  which the addendum above adds — when these lived higher up the file a
+--  fresh run died here with "column c.gst_number does not exist", and every
+--  statement after it (the column backfills, the calls / quotations /
+--  expenses / service_visits tables and ALL of their RLS policies) silently
+--  never ran.
+--
+--  security_invoker = on makes a view apply the RLS of whoever queries it.
+--  Without it a view runs as its owner, so it can return every account's
+--  rows — which is what Supabase's advisor reports as "Security Definer
+--  View".
+-- =====================================================================
+drop view if exists public.upcoming_reminders;
+create view public.upcoming_reminders
+  with (security_invoker = on) as
+select r.*, c.name as customer_name, c.phone as customer_phone
+from public.reminders r
+join public.customers c on c.id = r.customer_id
+where r.done = false
+order by r.due_date;
+
+drop view if exists public.customer_summary;
+create view public.customer_summary
+  with (security_invoker = on) as
+select
+  c.id,
+  c.owner_id,
+  c.code,
+  c.name,
+  c.phone,
+  c.gst_number,
+  count(s.id)                                      as total_services,
+  coalesce(sum(s.total_amount), 0)                 as total_spent,
+  coalesce(sum(s.amount_paid), 0)                  as total_paid,
+  greatest(0, coalesce(sum(s.balance), 0))         as outstanding,
+  max(s.service_date)                              as last_service_date,
+  min(s.next_service_date) filter (where s.next_service_date >= current_date)
+                                                   as next_service_date
+from public.customers c
+left join public.services s
+       on s.customer_id = c.id and s.status <> 'Cancelled'
+group by c.id;
+
+-- Make PostgREST pick up new columns immediately instead of serving a stale
+-- schema cache (which would keep failing sync with the same error).
+notify pgrst, 'reload schema';

@@ -1,8 +1,9 @@
-import { db, getSettings, sortParts } from '@/lib/db'
+import { db, getSettings, nowISO, sortParts } from '@/lib/db'
 import type { CustomerContact, Expense, ServiceVisit } from '@/types'
 import type { Call, Customer, Equipment, Payment, Quotation, Reminder, Service, ServicePart } from '@/types'
 import { downloadCSV, downloadJSON, timestampSuffix } from '@/utils/csv'
 import { setSuppressJournal } from '@/services/sync'
+import { cloudEnabled, SYNC_TABLES } from '@/lib/cloud'
 
 export interface BackupFile {
   app: 'tech-city-technology'
@@ -95,6 +96,12 @@ export async function restoreBackup(raw: string) {
     throw new Error('This does not look like a Tech City Technology backup file.')
 
   const d = parsed.data
+  // Restoring rewrites the local store wholesale. Journalling is suppressed so
+  // the clear below is not mistaken for the owner deleting records one by one;
+  // instead the rows the restore actually drops are journalled explicitly at
+  // the end, so the next sync removes them from the cloud too. Without that,
+  // the following pull (cloud is authoritative) simply hands the old rows back
+  // and the restore looks like it never happened.
   setSuppressJournal(true)
   try {
     await db.transaction(
@@ -116,6 +123,19 @@ export async function restoreBackup(raw: string) {
         db.outbox,
       ],
       async () => {
+        // Snapshot the ids present before the wipe, so the deletions this
+        // restore performs can be journalled for the cloud further down.
+        const idsBeforeRestore = new Map<string, string[]>()
+        // Local-only installs have no cloud to reconcile against, so skip the
+        // bookkeeping entirely rather than filling the outbox with rows that
+        // will never be sent.
+        for (const { local } of cloudEnabled ? SYNC_TABLES : []) {
+          idsBeforeRestore.set(
+            local,
+            (await db.table(local).toCollection().primaryKeys()) as string[],
+          )
+        }
+
         await Promise.all([
           db.customers.clear(),
           db.services.clear(),
@@ -145,6 +165,17 @@ export async function restoreBackup(raw: string) {
         if (d.counters?.length) await db.counters.bulkAdd(d.counters)
         if (d.settings?.length)
           await db.settings.bulkPut(d.settings as Awaited<ReturnType<typeof getSettings>>[])
+
+        // Tell the cloud about everything this restore removed.
+        for (const [table, priorIds] of idsBeforeRestore) {
+          if (!priorIds.length) continue
+          const kept = new Set(
+            (await db.table(table).toCollection().primaryKeys()) as string[],
+          )
+          for (const rowId of priorIds) {
+            if (!kept.has(rowId)) await db.outbox.add({ table, rowId, at: nowISO() })
+          }
+        }
       },
     )
   } finally {
