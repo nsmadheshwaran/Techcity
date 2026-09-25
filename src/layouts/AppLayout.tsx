@@ -22,7 +22,7 @@ import {
 } from 'lucide-react'
 import { BrandMark } from '@/components/BrandMark'
 import { GlobalSearch, GlobalSearchProvider } from '@/components/GlobalSearch'
-import { CloudSyncPill } from '@/cloud/CloudGate'
+import { CloudBanner, CloudSyncPill } from '@/cloud/CloudGate'
 import { useAuth } from '@/lib/auth'
 import { useReminders, useServices, useSettings } from '@/hooks/useData'
 import { daysUntil } from '@/utils/format'
@@ -262,6 +262,7 @@ function AppShell() {
         </header>
 
         <main className="mx-auto w-full max-w-[1600px] px-3 pb-28 pt-4 sm:px-5 sm:pb-10 sm:pt-5">
+          <CloudBanner />
           <Outlet />
         </main>
       </div>

@@ -97,13 +97,27 @@ export function CloudProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe?.()
   }, [refresh, mounted])
 
-  // Periodic + on-focus refresh so the other device's changes appear.
+  // Real-time Postgres changes channel + periodic + on-focus refresh so multi-device changes update instantly.
   useEffect(() => {
     if (!cloudEnabled || !supabase || !userEmail) return
+
+    // Supabase Realtime Subscription for immediate multi-device sync
+    const channel = supabase
+      .channel('techcity-db-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public' },
+        () => {
+          void refresh()
+        }
+      )
+      .subscribe()
+
     const timer = setInterval(() => void refresh(), SYNC_INTERVAL_MS)
     const onFocus = () => void refresh()
     window.addEventListener('focus', onFocus)
     return () => {
+      if (supabase) void supabase.removeChannel(channel)
       clearInterval(timer)
       window.removeEventListener('focus', onFocus)
     }
@@ -403,6 +417,43 @@ export function CloudSyncPill() {
       <span className="hidden sm:inline">Local Mode</span>
       <Cloud size={12} className="text-ink-400" />
     </button>
+  )
+}
+
+/** Notice banner shown when the app is in Local Mode so users know to log in for sync. */
+export function CloudBanner() {
+  const cloud = useCloud()
+  const [dismissed, setDismissed] = useState(false)
+
+  if (!cloud.enabled || cloud.userEmail || dismissed) return null
+
+  return (
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200/80 bg-amber-50/90 px-3.5 py-2.5 text-xs text-amber-900 shadow-sm no-print">
+      <div className="flex items-center gap-2">
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-200 text-amber-800">
+          <Cloud size={12} />
+        </span>
+        <span>
+          <strong>Local Mode:</strong> This device is storing data locally. Sign in to sync customer records across all your devices.
+        </span>
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => cloud.setLoginModalOpen(true)}
+          className="rounded-md bg-amber-600 px-2.5 py-1 font-semibold text-white hover:bg-amber-700 transition-colors"
+        >
+          Sign In to Sync
+        </button>
+        <button
+          onClick={() => setDismissed(true)}
+          className="rounded p-1 text-amber-700 hover:bg-amber-200/60"
+          title="Dismiss banner"
+          aria-label="Dismiss banner"
+        >
+          <X size={14} />
+        </button>
+      </div>
+    </div>
   )
 }
 

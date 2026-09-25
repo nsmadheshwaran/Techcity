@@ -66,10 +66,20 @@ async function flushOutbox(): Promise<number> {
 async function pushTable(local: string, cloud: string) {
   const rows = await db.table(local).toArray()
   if (!rows.length) return
-  const payload = rows.map((r) => toCloudRow(r as Record<string, unknown>))
+  // Filter out demo rows (isDemo: true) so sample/demo data is never uploaded to the cloud
+  // or causes code unique constraint collisions with real cloud records.
+  const realRows = rows.filter((r) => !(r as Record<string, unknown>).isDemo)
+  if (!realRows.length) return
+
+  const payload = realRows.map((r) => toCloudRow(r as Record<string, unknown>))
   for (const part of chunk(payload, UPLOAD_CHUNK)) {
     const { error } = await supabase!.from(cloud).upsert(part, { onConflict: 'id' })
-    if (error) throw new Error(`${cloud}: ${error.message}`)
+    if (error) {
+      console.warn(`[Sync] Push warning for ${cloud}:`, error.message)
+      if (!error.message.includes('unique constraint') && !error.message.includes('duplicate key')) {
+        throw new Error(`${cloud}: ${error.message}`)
+      }
+    }
   }
 }
 
