@@ -43,11 +43,17 @@ export function snakeToCamel(value: string): string {
   return value.replace(/_([a-z])/g, (_m, c: string) => c.toUpperCase())
 }
 
-/** camelCase local row → snake_case cloud row, dropping unset fields. */
+/** camelCase local row → snake_case cloud row, dropping unset fields (with defaults for numeric columns). */
 export function toCloudRow(row: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const [key, val] of Object.entries(row)) {
-    if (val === undefined || val === null) continue
+    if (val === undefined || val === null) {
+      // Default numeric columns to 0 so NOT NULL constraints in Supabase schema aren't violated
+      if (['deliveryCharge', 'serviceCharge', 'partsCost', 'discount', 'taxPercent', 'totalAmount', 'amountPaid', 'balance', 'quantity', 'unitPrice', 'total', 'amount', 'subtotal', 'taxAmount'].includes(key)) {
+        out[camelToSnake(key)] = 0
+      }
+      continue
+    }
     out[camelToSnake(key)] = val
   }
   return out
