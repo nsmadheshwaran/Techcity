@@ -38,3 +38,6 @@ shot-*.png
 
 .vercel
 .env*
+
+# Supabase CLI scratch
+supabase/.temp/
