@@ -2,6 +2,7 @@ import { db, getSettings, sortParts } from '@/lib/db'
 import type { CustomerContact, Expense, ServiceVisit } from '@/types'
 import type { Call, Customer, Equipment, Payment, Quotation, Reminder, Service, ServicePart } from '@/types'
 import { downloadCSV, downloadJSON, timestampSuffix } from '@/utils/csv'
+import { setSuppressJournal } from '@/services/sync'
 
 export interface BackupFile {
   app: 'tech-city-technology'
@@ -94,56 +95,61 @@ export async function restoreBackup(raw: string) {
     throw new Error('This does not look like a Tech City Technology backup file.')
 
   const d = parsed.data
-  await db.transaction(
-    'rw',
-    [
-      db.customers,
-      db.services,
-      db.serviceParts,
-      db.payments,
-      db.equipment,
-      db.serviceVisits,
-      db.expenses,
-      db.reminders,
-      db.customerContacts,
-      db.calls,
-      db.quotations,
-      db.settings,
-      db.counters,
-      db.outbox,
-    ],
-    async () => {
-      await Promise.all([
-        db.customers.clear(),
-        db.services.clear(),
-        db.serviceParts.clear(),
-        db.payments.clear(),
-        db.equipment.clear(),
-        db.serviceVisits.clear(),
-        db.expenses.clear(),
-        db.reminders.clear(),
-        db.customerContacts.clear(),
-        db.calls.clear(),
-        db.quotations.clear(),
-        db.counters.clear(),
-        db.outbox.clear(),
-      ])
-      if (d.customers?.length) await db.customers.bulkAdd(d.customers)
-      if (d.services?.length) await db.services.bulkAdd(d.services)
-      if (d.serviceParts?.length) await db.serviceParts.bulkAdd(d.serviceParts)
-      if (d.payments?.length) await db.payments.bulkAdd(d.payments)
-      if (d.equipment?.length) await db.equipment.bulkAdd(d.equipment)
-      if (d.serviceVisits?.length) await db.serviceVisits.bulkAdd(d.serviceVisits)
-      if (d.expenses?.length) await db.expenses.bulkAdd(d.expenses)
-      if (d.reminders?.length) await db.reminders.bulkAdd(d.reminders)
-      if (d.customerContacts?.length) await db.customerContacts.bulkAdd(d.customerContacts)
-      if (d.calls?.length) await db.calls.bulkAdd(d.calls)
-      if (d.quotations?.length) await db.quotations.bulkAdd(d.quotations)
-      if (d.counters?.length) await db.counters.bulkAdd(d.counters)
-      if (d.settings?.length)
-        await db.settings.bulkPut(d.settings as Awaited<ReturnType<typeof getSettings>>[])
-    },
-  )
+  setSuppressJournal(true)
+  try {
+    await db.transaction(
+      'rw',
+      [
+        db.customers,
+        db.services,
+        db.serviceParts,
+        db.payments,
+        db.equipment,
+        db.serviceVisits,
+        db.expenses,
+        db.reminders,
+        db.customerContacts,
+        db.calls,
+        db.quotations,
+        db.settings,
+        db.counters,
+        db.outbox,
+      ],
+      async () => {
+        await Promise.all([
+          db.customers.clear(),
+          db.services.clear(),
+          db.serviceParts.clear(),
+          db.payments.clear(),
+          db.equipment.clear(),
+          db.serviceVisits.clear(),
+          db.expenses.clear(),
+          db.reminders.clear(),
+          db.customerContacts.clear(),
+          db.calls.clear(),
+          db.quotations.clear(),
+          db.counters.clear(),
+          db.outbox.clear(),
+        ])
+        if (d.customers?.length) await db.customers.bulkAdd(d.customers)
+        if (d.services?.length) await db.services.bulkAdd(d.services)
+        if (d.serviceParts?.length) await db.serviceParts.bulkAdd(d.serviceParts)
+        if (d.payments?.length) await db.payments.bulkAdd(d.payments)
+        if (d.equipment?.length) await db.equipment.bulkAdd(d.equipment)
+        if (d.serviceVisits?.length) await db.serviceVisits.bulkAdd(d.serviceVisits)
+        if (d.expenses?.length) await db.expenses.bulkAdd(d.expenses)
+        if (d.reminders?.length) await db.reminders.bulkAdd(d.reminders)
+        if (d.customerContacts?.length) await db.customerContacts.bulkAdd(d.customerContacts)
+        if (d.calls?.length) await db.calls.bulkAdd(d.calls)
+        if (d.quotations?.length) await db.quotations.bulkAdd(d.quotations)
+        if (d.counters?.length) await db.counters.bulkAdd(d.counters)
+        if (d.settings?.length)
+          await db.settings.bulkPut(d.settings as Awaited<ReturnType<typeof getSettings>>[])
+      },
+    )
+  } finally {
+    setSuppressJournal(false)
+  }
   return {
     customers: d.customers?.length ?? 0,
     services: d.services?.length ?? 0,

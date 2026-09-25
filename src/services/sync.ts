@@ -24,6 +24,10 @@ let hooksInstalled = false
 let suppressJournal = false
 let running = false
 
+export function setSuppressJournal(val: boolean) {
+  suppressJournal = val
+}
+
 /** Installs deletion journaling so row deletes reach the cloud on next sync. */
 export function installSyncHooks() {
   if (hooksInstalled || !cloudEnabled || !supabase) return
