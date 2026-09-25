@@ -19,6 +19,7 @@ import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useToast } from '@/components/ui/Toast'
 import { useSettings } from '@/hooks/useData'
 import { useAuth } from '@/lib/auth'
+import { useCloud } from '@/cloud/CloudContext'
 import { DEFAULT_SERVICE_TYPES, saveSettings } from '@/lib/db'
 import {
   exportBackupJSON,
@@ -561,6 +562,7 @@ function SecurityTab({ toast }: { toast: ToastApi }) {
 /* ------------------------------------------------------------------ */
 
 function BackupTab({ toast }: { toast: ToastApi }) {
+  const cloud = useCloud()
   const confirm = useConfirm()
   const restoreRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -593,8 +595,12 @@ function BackupTab({ toast }: { toast: ToastApi }) {
       const result = await restoreBackup(text)
       toast.success(
         'Backup restored',
-        `${result.customers} customers and ${result.services} services loaded.`,
+        `${result.customers} customers and ${result.services} services loaded. Refreshing pages…`,
       )
+      // Trigger cloud sync if logged in so restored records sync to Supabase immediately
+      if (cloud.userEmail) {
+        void cloud.refresh()
+      }
     } catch (err) {
       toast.error('Restore failed', err instanceof Error ? err.message : 'Invalid backup file.')
     } finally {
