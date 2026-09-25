@@ -157,22 +157,68 @@ interface PushFailure {
   reason: string
 }
 
+/**
+ * Upserts a batch, surviving columns this project's database does not have.
+ *
+ * The two devices have not always had the same schema applied, so a payload can
+ * name a column the server has never heard of. PostgREST answers with
+ * "Could not find the '<col>' column of '<table>' in the schema cache" and
+ * rejects everything. Rather than abort the whole sync over one unknown field,
+ * drop that column from the batch and try again — the remaining columns still
+ * carry the record. The loop is bounded so a genuinely broken table cannot spin.
+ */
+async function upsertTolerantOfSchema(
+  cloud: string,
+  rows: Record<string, unknown>[],
+): Promise<{ error: { message: string } | null; dropped: string[] }> {
+  let payload = rows
+  const dropped: string[] = []
+
+  for (let attempt = 0; attempt <= 8; attempt += 1) {
+    const { error } = await supabase!.from(cloud).upsert(payload, { onConflict: 'id' })
+    if (!error) return { error: null, dropped }
+
+    const unknown = /Could not find the '([^']+)' column/.exec(error.message)
+    if (!unknown) return { error, dropped }
+
+    const column = unknown[1]
+    if (dropped.includes(column)) return { error, dropped }
+    dropped.push(column)
+    console.warn(`[Sync] ${cloud}: server has no '${column}' column — sending without it.`)
+    payload = payload.map((row) => {
+      const copy = { ...row }
+      delete copy[column]
+      return copy
+    })
+  }
+  return { error: { message: `${cloud}: too many unknown columns` }, dropped }
+}
+
 /** Upserts every local row of one table into the cloud (parents first). */
 async function pushTable(local: string, cloud: string, failures: PushFailure[]) {
   const rows = await db.table(local).toArray()
   if (!rows.length) return
-  // Filter out demo rows (isDemo: true) so sample/demo data is never uploaded to the cloud
-  // or causes code unique constraint collisions with real cloud records.
+  // Demo rows are never uploaded, so the cloud only ever holds real records.
   const realRows = rows.filter((r) => !(r as Record<string, unknown>).isDemo)
   if (!realRows.length) return
 
-  const payload = realRows.map((r) => toCloudRow(r as Record<string, unknown>))
+  const payload = realRows.map((r) => {
+    // `isDemo` is dropped rather than sent. It is always false for anything
+    // that gets this far, it tells the cloud nothing, and sending it made sync
+    // depend on every device's database having an is_demo column — which is
+    // precisely what "Could not find the 'is_demo' column of 'service_parts'"
+    // was. Where the column does exist it is NOT NULL DEFAULT false, so
+    // omitting it lands on the same value anyway.
+    const { isDemo: _isDemo, ...rest } = r as Record<string, unknown>
+    return toCloudRow(rest)
+  })
+
   // One request per distinct column signature: a column must never be present
   // for some rows and absent for others, or PostgREST pads the gaps with NULL
   // and NOT NULL columns reject the whole batch. See groupByColumns().
   for (const group of groupByColumns(payload)) {
     for (const part of chunk(group, UPLOAD_CHUNK)) {
-      const { error } = await supabase!.from(cloud).upsert(part, { onConflict: 'id' })
+      const { error } = await upsertTolerantOfSchema(cloud, part)
       if (!error) continue
 
       const conflict = /duplicate key|unique constraint/i.test(error.message)
@@ -183,9 +229,7 @@ async function pushTable(local: string, cloud: string, failures: PushFailure[]) 
       // refused is reported rather than discarded — silently skipping a row
       // here is what previously let the following pull delete it locally.
       for (const row of part) {
-        const { error: rowError } = await supabase!
-          .from(cloud)
-          .upsert([row], { onConflict: 'id' })
+        const { error: rowError } = await upsertTolerantOfSchema(cloud, [row])
         if (!rowError) continue
         console.warn(`[Sync] ${cloud} rejected a row:`, rowError.message)
         failures.push({
