@@ -1,6 +1,7 @@
 import { db, nowISO, type SyncOutboxRow } from '@/lib/db'
 import {
   cloudEnabled,
+  groupByColumns,
   supabase,
   SYNC_TABLES,
   toCloudRow,
@@ -76,12 +77,20 @@ async function pushTable(local: string, cloud: string) {
   if (!realRows.length) return
 
   const payload = realRows.map((r) => toCloudRow(r as Record<string, unknown>))
-  for (const part of chunk(payload, UPLOAD_CHUNK)) {
-    const { error } = await supabase!.from(cloud).upsert(part, { onConflict: 'id' })
-    if (error) {
-      console.warn(`[Sync] Push warning for ${cloud}:`, error.message)
-      if (!error.message.includes('unique constraint') && !error.message.includes('duplicate key')) {
-        throw new Error(`${cloud}: ${error.message}`)
+  // One request per distinct column signature: a column must never be present
+  // for some rows and absent for others, or PostgREST pads the gaps with NULL
+  // and NOT NULL columns reject the whole batch. See groupByColumns().
+  for (const group of groupByColumns(payload)) {
+    for (const part of chunk(group, UPLOAD_CHUNK)) {
+      const { error } = await supabase!.from(cloud).upsert(part, { onConflict: 'id' })
+      if (error) {
+        console.warn(`[Sync] Push warning for ${cloud}:`, error.message)
+        if (
+          !error.message.includes('unique constraint') &&
+          !error.message.includes('duplicate key')
+        ) {
+          throw new Error(`${cloud}: ${error.message}`)
+        }
       }
     }
   }
