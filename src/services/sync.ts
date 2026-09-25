@@ -67,8 +67,98 @@ async function flushOutbox(): Promise<number> {
   return entries.length
 }
 
+/**
+ * Human-readable codes are generated from a LOCAL counter, so two devices
+ * working offline both mint TC-CUS-00032. Whichever syncs second hits the
+ * unique index on `code` with a different id, and its record used to be
+ * dropped on the floor — then deleted locally by the pull that followed.
+ *
+ * Re-code the local row instead: take a number above everything either side
+ * has used, write it back locally, and let it upload cleanly. Nothing is lost
+ * and the collision cannot repeat, because the counter is advanced too.
+ */
+const CODE_TABLES: Record<string, { prefix: string; counter: string }> = {
+  customers: { prefix: 'TC-CUS-', counter: 'customer' },
+  services: { prefix: 'TC-SRV-', counter: 'service' },
+  equipment: { prefix: 'TC-EQP-', counter: 'equipment' },
+  quotations: { prefix: 'TC-QTN-', counter: 'quotation' },
+}
+
+/**
+ * Pure half of reconcileCodes: decides which local rows need a new code.
+ *
+ * A row keeps its code when the cloud has never seen it, or when the cloud row
+ * holding it IS this row. It is only reassigned when a DIFFERENT id already
+ * owns that code. New numbers start above the highest either side has used, so
+ * a reassignment can never collide with an existing record or with another
+ * reassignment in the same pass.
+ */
+export function planCodeReassignments(
+  mine: { id: string; code: string }[],
+  ownerOfCode: Map<string, string>,
+  prefix: string,
+): { changes: { id: string; code: string }[]; highest: number } {
+  const numberOf = (code: string) => {
+    const n = Number(code.slice(prefix.length))
+    return Number.isFinite(n) ? n : 0
+  }
+  let highest = 0
+  for (const c of ownerOfCode.keys()) highest = Math.max(highest, numberOf(c))
+  for (const r of mine) highest = Math.max(highest, numberOf(r.code))
+
+  const changes: { id: string; code: string }[] = []
+  for (const row of mine) {
+    const holder = ownerOfCode.get(row.code)
+    if (!holder || holder === row.id) continue
+    highest += 1
+    changes.push({ id: row.id, code: prefix + String(highest).padStart(5, '0') })
+  }
+  return { changes, highest }
+}
+
+async function reconcileCodes(local: string, cloud: string): Promise<number> {
+  const conf = CODE_TABLES[cloud]
+  if (!conf) return 0
+
+  const rows = (await db.table(local).toArray()) as Record<string, unknown>[]
+  const mine = rows.filter((r) => !r.isDemo && typeof r.code === 'string')
+  if (!mine.length) return 0
+
+  const { data, error } = await supabase!.from(cloud).select('id, code')
+  if (error) throw new Error(`${cloud}: ${error.message}`)
+
+  const ownerOfCode = new Map<string, string>()
+  for (const r of data ?? []) ownerOfCode.set(String(r.code), String(r.id))
+
+  const { changes, highest } = planCodeReassignments(
+    mine.map((r) => ({ id: String(r.id), code: r.code as string })),
+    ownerOfCode,
+    conf.prefix,
+  )
+
+  for (const change of changes) {
+    await db.table(local).update(change.id, { code: change.code, updatedAt: nowISO() })
+  }
+  const renamed = changes.length
+
+  if (renamed) {
+    const current = await db.counters.get(conf.counter)
+    if (!current || current.value < highest) {
+      await db.counters.put({ key: conf.counter, value: highest })
+    }
+  }
+  return renamed
+}
+
+/** A row the cloud refused for a reason the owner has to resolve. */
+interface PushFailure {
+  table: string
+  label: string
+  reason: string
+}
+
 /** Upserts every local row of one table into the cloud (parents first). */
-async function pushTable(local: string, cloud: string) {
+async function pushTable(local: string, cloud: string, failures: PushFailure[]) {
   const rows = await db.table(local).toArray()
   if (!rows.length) return
   // Filter out demo rows (isDemo: true) so sample/demo data is never uploaded to the cloud
@@ -83,14 +173,26 @@ async function pushTable(local: string, cloud: string) {
   for (const group of groupByColumns(payload)) {
     for (const part of chunk(group, UPLOAD_CHUNK)) {
       const { error } = await supabase!.from(cloud).upsert(part, { onConflict: 'id' })
-      if (error) {
-        console.warn(`[Sync] Push warning for ${cloud}:`, error.message)
-        if (
-          !error.message.includes('unique constraint') &&
-          !error.message.includes('duplicate key')
-        ) {
-          throw new Error(`${cloud}: ${error.message}`)
-        }
+      if (!error) continue
+
+      const conflict = /duplicate key|unique constraint/i.test(error.message)
+      if (!conflict) throw new Error(`${cloud}: ${error.message}`)
+
+      // A whole batch fails because of one bad row, so retry individually:
+      // 149 good records should not be held back by the 150th. Anything still
+      // refused is reported rather than discarded — silently skipping a row
+      // here is what previously let the following pull delete it locally.
+      for (const row of part) {
+        const { error: rowError } = await supabase!
+          .from(cloud)
+          .upsert([row], { onConflict: 'id' })
+        if (!rowError) continue
+        console.warn(`[Sync] ${cloud} rejected a row:`, rowError.message)
+        failures.push({
+          table: cloud,
+          label: String(row.code ?? row.name ?? row.id ?? 'record'),
+          reason: rowError.message,
+        })
       }
     }
   }
@@ -219,9 +321,34 @@ export async function syncNow(userId: string): Promise<SyncResult> {
         name === 'customers' ? 0 : name === 'customerContacts' ? 1 : name === 'services' ? 2 : 3
       return rank(a.cloud) - rank(b.cloud)
     })
-    for (const { local, cloud } of ordered) await pushTable(local, cloud)
+
+    // Settle code collisions with the cloud BEFORE uploading anything. A
+    // customer rejected here would take its services down with it on the next
+    // step, as a foreign key violation — which is the error that kept coming
+    // back every cycle.
+    for (const { local, cloud } of ordered) await reconcileCodes(local, cloud)
+
+    const failures: PushFailure[] = []
+    for (const { local, cloud } of ordered) await pushTable(local, cloud, failures)
     await pushCounters(userId)
     await pushSettings(userId)
+
+    if (failures.length) {
+      // Stop short of the pull on purpose. applyRemote() replaces the local
+      // store with the cloud's copy, so pulling now would delete exactly the
+      // records that just failed to upload. Leaving local untouched keeps them
+      // safe until the conflict is resolved.
+      const shown = failures.slice(0, 3).map((f) => `${f.label} (${f.reason})`)
+      const more = failures.length > shown.length ? ` +${failures.length - shown.length} more` : ''
+      return {
+        ok: false,
+        at,
+        error:
+          `${failures.length} record(s) could not be uploaded, so nothing was ` +
+          `downloaded either — your local data is untouched. ${shown.join('; ')}${more}`,
+      }
+    }
+
     const pulled = await pullCloudData()
     await applyRemote(pulled)
     return { ok: true, at }
