@@ -42,8 +42,5 @@ shot-*.png
 # Supabase CLI scratch
 supabase/.temp/
 
-# Tally exports — real company accounts (customer names, addresses, balances,
-# the full day book). Kept local; never committed.
+# Tally exports — real company accounts. Kept local; never committed.
 tally/
-*.Master.xml
-*.DayBook.xml

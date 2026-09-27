@@ -13,14 +13,13 @@ export async function findByPhone(phone: string, excludeId?: string) {
   return all.find(
     (c) =>
       c.id !== excludeId &&
-      ((c.phone ?? '').replace(/\D/g, '').slice(-10) === digits ||
+      (c.phone.replace(/\D/g, '').slice(-10) === digits ||
         (c.altPhone ?? '').replace(/\D/g, '').slice(-10) === digits),
   )
 }
 
 export async function createCustomer(draft: CustomerDraft): Promise<Customer> {
-  // A customer without a phone cannot collide on one, so skip the check.
-  const duplicate = draft.phone ? await findByPhone(draft.phone) : undefined
+  const duplicate = await findByPhone(draft.phone)
   if (duplicate) {
     throw new Error(
       `A customer with this phone number already exists: ${duplicate.name} (${duplicate.code})`,
@@ -104,7 +103,7 @@ export function searchCustomers<T extends Customer>(customers: T[], query: strin
     if ((c.email ?? '').toLowerCase().includes(q)) return true
     if ((c.city ?? '').toLowerCase().includes(q)) return true
     if (digits.length >= 3) {
-      if ((c.phone ?? '').replace(/\D/g, '').includes(digits)) return true
+      if (c.phone.replace(/\D/g, '').includes(digits)) return true
       if ((c.altPhone ?? '').replace(/\D/g, '').includes(digits)) return true
     }
     return false

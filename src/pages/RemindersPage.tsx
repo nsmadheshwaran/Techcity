@@ -240,7 +240,7 @@ function AddReminderModal({
 }: {
   open: boolean
   onClose: () => void
-  customers: { id: string; name: string; phone?: string }[]
+  customers: { id: string; name: string; phone: string }[]
 }) {
   const toast = useToast()
   const [customerId, setCustomerId] = useState('')

@@ -31,13 +31,6 @@ import {
   wipeAllData,
 } from '@/services/backup'
 import { clearDemoData, demoAllowed, seedDemoData } from '@/services/seed'
-import {
-  decodeTallyXml,
-  importTallyCustomers,
-  parseGstinsFromDayBook,
-  parseTallyMasters,
-  type TallyImportPreview,
-} from '@/services/tallyImport'
 import { readFileAsDataURL, readFileAsText } from '@/utils/csv'
 import { CloudStatusCard } from '@/cloud/CloudGate'
 
@@ -586,71 +579,6 @@ function BackupTab({ toast }: { toast: ToastApi }) {
     }
   }
 
-  const tallyRef = useRef<HTMLInputElement>(null)
-  const [tally, setTally] = useState<{
-    preview: TallyImportPreview
-    gstins: Map<string, string>
-    fileNames: string[]
-  } | null>(null)
-
-  /**
-   * Reads the chosen Tally export(s) and shows what WOULD be imported. Nothing
-   * is written until the owner confirms — an import that silently rewrote the
-   * customer list would be hard to unpick.
-   */
-  async function onTallyFiles(files: FileList | null) {
-    if (!files?.length) return
-    setBusy('tally')
-    try {
-      let preview: TallyImportPreview | null = null
-      let gstins = new Map<string, string>()
-      const names: string[] = []
-
-      for (const file of Array.from(files)) {
-        const xml = decodeTallyXml(await file.arrayBuffer())
-        names.push(file.name)
-        if (/<VOUCHER/.test(xml)) gstins = parseGstinsFromDayBook(xml)
-        if (/<LEDGER/.test(xml)) preview = parseTallyMasters(xml)
-      }
-
-      if (!preview) {
-        toast.error(
-          'No customer master found',
-          'Pick the Tally "All Masters" export (Master.xml). The day book on its own has no ledgers.',
-        )
-        return
-      }
-      if (!preview.customers.length) {
-        toast.error('Nothing to import', 'That export contains no Sundry Debtors.')
-        return
-      }
-      setTally({ preview, gstins, fileNames: names })
-    } catch (err) {
-      toast.error('Could not read file', err instanceof Error ? err.message : 'Unexpected format.')
-    } finally {
-      setBusy(null)
-      if (tallyRef.current) tallyRef.current.value = ''
-    }
-  }
-
-  async function onTallyImport() {
-    if (!tally) return
-    setBusy('tally')
-    try {
-      const result = await importTallyCustomers(tally.preview.customers, tally.gstins)
-      toast.success(
-        'Tally customers imported',
-        `${result.created} added, ${result.updated} updated, ${result.unchanged} already matched.`,
-      )
-      setTally(null)
-      if (cloud.userEmail) void cloud.refresh()
-    } catch (err) {
-      toast.error('Import failed', err instanceof Error ? err.message : 'Could not import.')
-    } finally {
-      setBusy(null)
-    }
-  }
-
   async function onRestore(file?: File) {
     if (!file) return
     const ok = await confirm({
@@ -725,98 +653,6 @@ function BackupTab({ toast }: { toast: ToastApi }) {
             <Upload size={16} /> Restore from Backup
           </button>
         </div>
-      </section>
-
-      <section className="card p-4 sm:p-5">
-        <h2 className="mb-1 text-[15px] font-semibold text-ink-900">Import from Tally</h2>
-        <p className="mb-4 text-[13px] text-ink-500">
-          Bring your customer list across from Tally so service records sit under the same names
-          your accounts use. Export <span className="font-medium">Gateway of Tally → Display →
-          List of Accounts → Alt+E</span> as XML, then pick the file here. Add the Day Book export
-          too and GST numbers will be filled in from your invoices.
-        </p>
-
-        <div className="mb-3 rounded-md border border-line bg-ink-50/70 px-3 py-2 text-[12.5px] text-ink-600">
-          Tally stays your book of record. This only copies customer details in — it never writes
-          back to Tally, and no balances or invoices are imported.
-        </div>
-
-        <input
-          ref={tallyRef}
-          type="file"
-          accept=".xml,text/xml,application/xml"
-          multiple
-          className="hidden"
-          onChange={(e) => onTallyFiles(e.target.files)}
-        />
-
-        {!tally ? (
-          <button
-            className="btn-secondary"
-            disabled={busy !== null}
-            onClick={() => tallyRef.current?.click()}
-          >
-            <Upload size={16} /> Choose Tally XML file(s)
-          </button>
-        ) : (
-          <div className="rounded-lg border border-line">
-            <div className="border-b border-line bg-ink-50/70 px-3.5 py-2.5">
-              <p className="text-[13px] font-semibold text-ink-900">
-                {tally.preview.company ?? 'Tally export'}
-              </p>
-              <p className="text-[12px] text-ink-500">{tally.fileNames.join(', ')}</p>
-            </div>
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 px-3.5 py-3 text-[13px] sm:grid-cols-4">
-              <div>
-                <dt className="detail-label">Customers</dt>
-                <dd className="detail-value font-bold">{tally.preview.customers.length}</dd>
-              </div>
-              <div>
-                <dt className="detail-label">Without phone</dt>
-                <dd className="detail-value font-bold">{tally.preview.withoutPhone}</dd>
-              </div>
-              <div>
-                <dt className="detail-label">GST numbers</dt>
-                <dd className="detail-value font-bold">{tally.gstins.size}</dd>
-              </div>
-              <div>
-                <dt className="detail-label">Suppliers</dt>
-                <dd className="detail-value font-bold">{tally.preview.supplierCount}</dd>
-              </div>
-            </dl>
-            <div className="space-y-1.5 border-t border-line px-3.5 py-2.5 text-[12.5px] text-ink-600">
-              {tally.preview.withoutPhone > 0 && (
-                <p>
-                  {tally.preview.withoutPhone} of these have no phone number in Tally. They will be
-                  imported anyway — Call and WhatsApp simply will not appear until you add one.
-                </p>
-              )}
-              {tally.preview.supplierCount > 0 && (
-                <p>
-                  {tally.preview.supplierCount} suppliers were found and will be skipped: the app
-                  has no supplier record yet.
-                </p>
-              )}
-              <p>
-                Customers you already have are matched by phone, then by name, and only their empty
-                fields are filled in. Nothing you have typed gets overwritten, so running this again
-                is safe.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2 border-t border-line bg-ink-50/60 px-3.5 py-2.5">
-              <button className="btn-primary" disabled={busy !== null} onClick={onTallyImport}>
-                Import {tally.preview.customers.length} customers
-              </button>
-              <button
-                className="btn-secondary"
-                disabled={busy !== null}
-                onClick={() => setTally(null)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
       </section>
 
       <section className="card p-4 sm:p-5">

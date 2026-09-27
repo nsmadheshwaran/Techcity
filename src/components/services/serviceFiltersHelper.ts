@@ -35,7 +35,7 @@ export function applyFilters<
 >(
   rows: T[],
   filters: FilterState,
-  customerLookup: (id: string) => { name: string; phone?: string; code: string } | undefined,
+  customerLookup: (id: string) => { name: string; phone: string; code: string } | undefined,
 ): T[] {
   const q = filters.query.trim().toLowerCase()
   const digits = q.replace(/\D/g, '')
@@ -65,7 +65,7 @@ export function applyFilters<
       .join(' ')
       .toLowerCase()
     if (haystack.includes(q)) return true
-    if (digits.length >= 3 && (c?.phone ?? '').replace(/\D/g, '').includes(digits)) return true
+    if (digits.length >= 3 && c?.phone.replace(/\D/g, '').includes(digits)) return true
     return false
   })
 }

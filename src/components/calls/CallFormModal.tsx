@@ -119,7 +119,7 @@ export function CallFormModal({ open, onClose, onSaved, call, defaultCustomerId 
     setForm((f) => ({
       ...f,
       name: f.name.trim() ? f.name : linkedCustomer.name,
-      phone: f.phone.trim() ? f.phone : (linkedCustomer.phone ?? ''),
+      phone: f.phone.trim() ? f.phone : linkedCustomer.phone,
       // Default the distance from the customer's saved location.
       distanceKm: f.distanceKm || (linkedCustomer.distanceKm ? String(linkedCustomer.distanceKm) : ''),
     }))
