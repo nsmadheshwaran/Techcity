@@ -60,7 +60,7 @@ export function CustomerFormModal({ open, onClose, onSaved, customer, initial }:
     if (customer) {
       setForm({
         name: customer.name,
-        phone: customer.phone,
+        phone: customer.phone ?? '',
         altPhone: customer.altPhone ?? '',
         email: customer.email ?? '',
         address: customer.address ?? '',

@@ -636,7 +636,7 @@ export async function seedDemoData(): Promise<{ customers: number; services: num
   for (const c of customers) {
     // Skip if a customer with that phone already exists (avoids duplicates on re-seed).
     const all = await db.customers.toArray()
-    const exists = all.find((x) => x.phone.replace(/\D/g, '') === c.phone.replace(/\D/g, ''))
+    const exists = all.find((x) => (x.phone ?? '').replace(/\D/g, '') === c.phone.replace(/\D/g, ''))
     if (exists) {
       created.push(exists)
       continue

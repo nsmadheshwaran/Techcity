@@ -21,7 +21,13 @@ export interface BaseRow {
 export interface Customer extends BaseRow {
   code: string // TC-CUS-00001
   name: string
-  phone: string
+  /**
+   * Optional because a real customer master has businesses that were only ever
+   * invoiced to an address — 51 of the 63 ledgers in the Tally export carry no
+   * phone at all. Anything that dials, messages or de-duplicates on this must
+   * handle it being absent.
+   */
+  phone?: string
   altPhone?: string
   email?: string
   address?: string

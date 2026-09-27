@@ -230,7 +230,7 @@ export default function CustomerDetailPage() {
     }
   }
 
-  const waNumber = toWhatsAppNumber(customer.phone)
+  const waNumber = toWhatsAppNumber(customer.phone ?? '')
   const primaryContacts = contacts ?? []
 
   return (
@@ -283,9 +283,16 @@ export default function CustomerDetailPage() {
               <div className="flex items-start gap-2.5">
                 <Phone size={15} className="mt-0.5 shrink-0 text-ink-400" />
                 <dd className="min-w-0">
-                  <a href={`tel:${customer.phone}`} className="font-medium text-ink-900 hover:text-brand-700">
-                    {customer.phone}
-                  </a>
+                  {customer.phone ? (
+                    <a
+                      href={`tel:${customer.phone}`}
+                      className="font-medium text-ink-900 hover:text-brand-700"
+                    >
+                      {customer.phone}
+                    </a>
+                  ) : (
+                    <span className="text-ink-400">No phone on record</span>
+                  )}
                   {customer.altPhone && (
                     <span className="block text-[12.5px] text-ink-500">Alt: {customer.altPhone}</span>
                   )}
@@ -367,19 +374,21 @@ export default function CustomerDetailPage() {
               </p>
             )}
 
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <a href={`tel:${customer.phone}`} className="btn-secondary">
-                <Phone size={15} /> Call
-              </a>
-              <a
-                href={`https://wa.me/${waNumber}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn-secondary"
-              >
-                <MessageCircle size={15} /> WhatsApp
-              </a>
-            </div>
+            {customer.phone && (
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <a href={`tel:${customer.phone}`} className="btn-secondary">
+                  <Phone size={15} /> Call
+                </a>
+                <a
+                  href={`https://wa.me/${waNumber}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-secondary"
+                >
+                  <MessageCircle size={15} /> WhatsApp
+                </a>
+              </div>
+            )}
           </section>
 
           <section className="card">

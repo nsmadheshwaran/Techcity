@@ -289,14 +289,19 @@ export default function CustomersPage() {
                         </div>
                       </td>
                       <td className="table-td">
-                        <p className="font-medium text-ink-800">{c.phone}</p>
+                        <p className="font-medium text-ink-800">
+                          {c.phone || <span className="text-ink-400">No phone</span>}
+                        </p>
                         {c.email && <p className="truncate text-[12px] cell-muted">{c.email}</p>}
                       </td>
                       {/* One-tap WhatsApp / call, without opening the record */}
                       <td className="table-td" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1.5">
+                          {!c.phone && <span className="text-[12px] text-ink-400">—</span>}
+                          {c.phone && (
+                          <>
                           <a
-                            href={`https://wa.me/${toWhatsAppNumber(c.phone)}?text=${encodeURIComponent(
+                            href={`https://wa.me/${toWhatsAppNumber(c.phone ?? '')}?text=${encodeURIComponent(
                               `Hello ${c.name.split(' ')[0]}, this is ${settings.name}. How can we assist you today?`,
                             )}`}
                             target="_blank"
@@ -315,6 +320,8 @@ export default function CustomersPage() {
                           >
                             <Phone size={13} />
                           </a>
+                          </>
+                          )}
                         </div>
                       </td>
                       <td className="table-td cell-muted">{c.city || '—'}</td>
@@ -359,9 +366,11 @@ export default function CustomersPage() {
                           <p className="truncate text-[14.5px] font-bold text-ink-900">{c.name}</p>
                           <span className="code-chip shrink-0">{c.code}</span>
                         </div>
-                        <p className="mt-1 flex items-center gap-1.5 text-[13px] font-medium text-ink-700">
-                          <Phone size={12} className="shrink-0 text-ink-400" /> {c.phone}
-                        </p>
+                        {c.phone && (
+                          <p className="mt-1 flex items-center gap-1.5 text-[13px] font-medium text-ink-700">
+                            <Phone size={12} className="shrink-0 text-ink-400" /> {c.phone}
+                          </p>
+                        )}
                         {c.email && (
                           <p className="mt-0.5 flex items-center gap-1.5 truncate text-[12px] cell-muted">
                             <Mail size={12} className="shrink-0 text-ink-400" /> {c.email}
@@ -397,8 +406,10 @@ export default function CustomersPage() {
                             className="flex items-center gap-1.5"
                             onClick={(e) => e.stopPropagation()}
                           >
+                            {c.phone && (
+                            <>
                             <a
-                              href={`https://wa.me/${toWhatsAppNumber(c.phone)}?text=${encodeURIComponent(
+                              href={`https://wa.me/${toWhatsAppNumber(c.phone ?? '')}?text=${encodeURIComponent(
                                 `Hello ${c.name.split(' ')[0]}, this is ${settings.name}. How can we assist you today?`,
                               )}`}
                               target="_blank"
@@ -415,6 +426,8 @@ export default function CustomersPage() {
                             >
                               <Phone size={12} /> Call
                             </a>
+                            </>
+                            )}
                           </div>
                         </div>
                       </div>

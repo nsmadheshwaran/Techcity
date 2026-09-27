@@ -54,7 +54,7 @@ export function whatsappLink(
   service: Service,
   settings: BusinessSettings,
 ): string {
-  const number = toWhatsAppNumber(customer.phone)
+  const number = toWhatsAppNumber(customer.phone ?? '')
   const text = encodeURIComponent(whatsappMessage(customer, service, settings))
   return number ? `https://wa.me/${number}?text=${text}` : `https://wa.me/?text=${text}`
 }
