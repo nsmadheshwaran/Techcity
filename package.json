@@ -39,7 +39,9 @@
     "playwright": "^1.62.1",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
-    "vite": "^8.2.0"
+    "vite": "^8.2.0",
+    "vite-plugin-pwa": "^2.0.0",
+    "workbox-window": "^7.4.1"
   },
   "description": "Customer & Service Management System for Tech City Technology — Computer Sales, Service, CCTV & Networking"
 }

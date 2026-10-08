@@ -3,12 +3,16 @@ import { useSearchParams } from 'react-router-dom'
 import {
   AlertTriangle,
   Building2,
+  CheckCircle2,
   Cloud,
   Database,
+  Download,
   FileText,
   Lock,
+  Monitor,
   Save,
   Settings2,
+  Smartphone,
   Trash2,
   Upload,
   X,
@@ -561,6 +565,94 @@ function SecurityTab({ toast }: { toast: ToastApi }) {
 
 /* ------------------------------------------------------------------ */
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
+}
+
+function InstallAppCard() {
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
+  const [installed, setInstalled] = useState(false)
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault()
+      setDeferredPrompt(e as BeforeInstallPromptEvent)
+    }
+    window.addEventListener('beforeinstallprompt', handler)
+    window.addEventListener('appinstalled', () => setInstalled(true))
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler)
+    }
+  }, [])
+
+  async function handleInstall() {
+    if (!deferredPrompt) return
+    await deferredPrompt.prompt()
+    const { outcome } = await deferredPrompt.userChoice
+    if (outcome === 'accepted') setInstalled(true)
+    setDeferredPrompt(null)
+  }
+
+  return (
+    <section className="card border-brand-200/80 bg-gradient-to-br from-white via-brand-50/20 to-brand-50/40 p-4 sm:p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-3 border-b border-ink-100 pb-3.5 mb-4">
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600 text-white shadow-md shadow-brand-600/20">
+            <Smartphone size={20} />
+          </span>
+          <div>
+            <h2 className="text-[15.5px] font-bold text-ink-900 leading-tight">Install App on Mobile & Monitor</h2>
+            <p className="text-[12px] text-ink-500">Run TechCity CRM as a standalone app on your phone, tablet, or PC counter screen</p>
+          </div>
+        </div>
+        {installed && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+            <CheckCircle2 size={13} /> Installed
+          </span>
+        )}
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="rounded-lg border border-ink-200/80 bg-white p-3.5 shadow-2xs">
+          <div className="flex items-center gap-2 text-ink-900 font-semibold text-sm mb-1.5">
+            <Smartphone size={16} className="text-brand-600" />
+            <span>Mobile Phone (Android / iPhone)</span>
+          </div>
+          <p className="text-xs text-ink-600 leading-relaxed">
+            Open this page in <strong>Chrome</strong> (Android) or <strong>Safari</strong> (iPhone/iPad).
+            Tap the menu / share button and select <strong>&quot;Add to Home Screen&quot;</strong> or <strong>&quot;Install App&quot;</strong>.
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-ink-200/80 bg-white p-3.5 shadow-2xs">
+          <div className="flex items-center gap-2 text-ink-900 font-semibold text-sm mb-1.5">
+            <Monitor size={16} className="text-brand-600" />
+            <span>Counter Monitor / PC (Chrome / Edge)</span>
+          </div>
+          <p className="text-xs text-ink-600 leading-relaxed">
+            In Chrome or Edge, click the <strong>Install icon</strong> in the right side of the address bar, or open browser menu → <strong>Cast, save and share → Install app</strong>.
+          </p>
+        </div>
+      </div>
+
+      {deferredPrompt && !installed && (
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-lg bg-brand-600 px-4 py-2.5 text-white">
+          <span className="text-xs font-medium">Ready to install directly on this device!</span>
+          <button
+            onClick={handleInstall}
+            className="inline-flex items-center gap-1.5 rounded-md bg-white px-3 py-1 text-xs font-bold text-brand-700 shadow-sm transition-transform active:scale-95"
+          >
+            <Download size={14} /> Install Now
+          </button>
+        </div>
+      )}
+    </section>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+
 function BackupTab({ toast }: { toast: ToastApi }) {
   const cloud = useCloud()
   const confirm = useConfirm()
@@ -624,6 +716,7 @@ function BackupTab({ toast }: { toast: ToastApi }) {
   return (
     <div className="space-y-4">
       <CloudStatusCard />
+      <InstallAppCard />
       <section className="card p-4 sm:p-5">
         <h2 className="mb-1 text-[15px] font-semibold text-ink-900">Backup & Restore</h2>
         <p className="mb-4 text-[13px] leading-relaxed text-ink-500">
