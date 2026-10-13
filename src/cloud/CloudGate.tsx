@@ -396,7 +396,7 @@ export function CloudSyncPill() {
               ? 'bg-brand-500 animate-ping'
               : cloud.syncError
               ? 'bg-red-500'
-              : 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.7)]'
+              : 'bg-emerald-500'
           }`}
         />
         <span className="hidden sm:inline">
