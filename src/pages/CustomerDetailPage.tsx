@@ -196,35 +196,14 @@ export default function CustomerDetailPage() {
   async function downloadHistory() {
     if (!customer) return
     try {
-      const custPayments = payments ?? []
-      const { buildDocument } = await import('@/pdf/documents')
-      const doc = buildDocument({
-        kind: 'history',
-        service: {
-          ...({
-            code: customer.code,
-            serviceDate: customer.dateAdded,
-            serviceType: 'Customer History',
-            status: 'Completed',
-            serviceMode: 'Offline',
-            complaint: '',
-            serviceCharge: 0,
-            partsCost: 0,
-            discount: 0,
-            taxPercent: 0,
-            totalAmount: stats.totalSpent,
-            amountPaid: stats.totalPaid,
-            balance: stats.outstanding,
-            paymentStatus: 'Paid',
-          } as any),
-        } as any,
+      const { downloadCustomerHistory } = await import('@/pdf/documents')
+      downloadCustomerHistory({
         customer,
-        parts: [],
-        payments: custPayments,
+        services: services ?? [],
+        payments: payments ?? [],
         settings,
       })
-      doc.save(`CustomerHistory-${customer.code}-${customer.name.replace(/[^a-zA-Z0-9]+/g, '-')}.pdf`)
-      toast.success('History downloaded', `Full history for ${customer.name}`)
+      toast.success('History downloaded', `Full service history for ${customer.name}`)
     } catch (err) {
       toast.error('Download failed', err instanceof Error ? err.message : 'Could not generate PDF.')
     }

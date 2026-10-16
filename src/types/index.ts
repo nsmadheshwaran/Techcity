@@ -220,6 +220,31 @@ export interface Payment extends BaseRow {
 /* Equipment                                                           */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Stock item kept in the shop — what is physically on the shelf, separate
+ * from Equipment (which tracks what has been INSTALLED at a customer site).
+ * Quantity is adjusted directly rather than derived from service parts, so
+ * it stays simple: a manual count the owner corrects on a stock-take, not an
+ * automatic ledger reconciled against every part used on every job.
+ */
+export interface Product extends BaseRow {
+  code: string // TC-PRD-00001
+  name: string
+  category?: string
+  brand?: string
+  /** Units currently on the shelf. */
+  quantity: number
+  unit?: string // e.g. "pcs", "box", "roll"
+  /** What the shop paid per unit — never shown on customer documents. */
+  costPrice?: number
+  /** What the shop charges per unit when sold/used on a job. */
+  sellPrice?: number
+  /** Reorder reminder threshold; the stock list flags anything at or below it. */
+  lowStockThreshold?: number
+  location?: string
+  notes?: string
+}
+
 export const EQUIPMENT_STATUSES = ['Active', 'Under Repair', 'Replaced', 'Removed'] as const
 export type EquipmentStatus = (typeof EQUIPMENT_STATUSES)[number]
 

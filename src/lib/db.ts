@@ -8,6 +8,7 @@ import type {
   Equipment,
   Expense,
   Payment,
+  Product,
   Quotation,
   Reminder,
   Service,
@@ -42,6 +43,7 @@ export class TechCityDB extends Dexie {
   reminders!: Table<Reminder, string>
   calls!: Table<Call, string>
   quotations!: Table<Quotation, string>
+  products!: Table<Product, string>
   settings!: Table<BusinessSettings, string>
   users!: Table<AppUser, string>
   counters!: Table<{ key: string; value: number }, string>
@@ -102,6 +104,12 @@ export class TechCityDB extends Dexie {
     this.version(6).stores({
       serviceVisits: 'id, serviceId, customerId, date, createdAt',
       expenses: 'id, date, type, category, serviceId, customerId, createdAt',
+    })
+
+    // v7 — shop stock (products on the shelf, separate from Equipment, which
+    // tracks what has been installed at a customer's site).
+    this.version(7).stores({
+      products: 'id, code, name, category, quantity, createdAt, isDemo',
     })
   }
 }
@@ -166,16 +174,22 @@ export function nowISO(): string {
  * Runs inside a Dexie transaction so two concurrent creates can never collide.
  * Falls back to scanning existing rows so codes stay unique even after an import.
  */
-export async function nextCode(kind: 'customer' | 'service' | 'equipment' | 'invoice' | 'quotation') {
+export async function nextCode(
+  kind: 'customer' | 'service' | 'equipment' | 'invoice' | 'quotation' | 'product',
+) {
   const config = {
     customer: { key: 'customer', prefix: 'TC-CUS-', table: db.customers },
     service: { key: 'service', prefix: 'TC-SRV-', table: db.services },
     equipment: { key: 'equipment', prefix: 'TC-EQP-', table: db.equipment },
     invoice: { key: 'invoice', prefix: 'TC-INV-', table: null },
     quotation: { key: 'quotation', prefix: 'TC-QTN-', table: db.quotations },
+    product: { key: 'product', prefix: 'TC-PRD-', table: db.products },
   }[kind]
 
-  return db.transaction('rw', db.counters, db.customers, db.services, db.equipment, db.quotations, async () => {
+  return db.transaction(
+    'rw',
+    [db.counters, db.customers, db.services, db.equipment, db.quotations, db.products],
+    async () => {
     const row = await db.counters.get(config.key)
     let next = (row?.value ?? 0) + 1
 
@@ -193,9 +207,10 @@ export async function nextCode(kind: 'customer' | 'service' | 'equipment' | 'inv
       }
     }
 
-    await db.counters.put({ key: config.key, value: next })
-    return config.prefix + String(next).padStart(5, '0')
-  })
+      await db.counters.put({ key: config.key, value: next })
+      return config.prefix + String(next).padStart(5, '0')
+    },
+  )
 }
 
 /* ------------------------------------------------------------------ */

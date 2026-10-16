@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Download, HardDrive, Pencil, Plus, Trash2 } from 'lucide-react'
+import { HardDrive, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ExportButton } from '@/components/ui/ExportButton'
 import { PageHeader } from '@/components/PageHeader'
 import { EquipmentFormModal } from '@/components/equipment/EquipmentFormModal'
 import { EquipmentBadge } from '@/components/ui/Badges'
@@ -14,7 +15,7 @@ import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useToast } from '@/components/ui/Toast'
 import { useCustomerMap, useEquipment } from '@/hooks/useData'
 import { deleteEquipment } from '@/services/equipment'
-import { exportEquipmentCSV } from '@/services/backup'
+import { exportEquipmentCSV, type ExportFormat } from '@/services/backup'
 import { EQUIPMENT_STATUSES, type Equipment } from '@/types'
 import { daysUntil, formatDate } from '@/utils/format'
 
@@ -72,10 +73,10 @@ export default function EquipmentPage() {
     }
   }
 
-  async function onExport() {
+  async function onExport(format: ExportFormat) {
     try {
-      const count = await exportEquipmentCSV()
-      toast.success('Equipment exported', `${count} record(s) saved as CSV.`)
+      const count = await exportEquipmentCSV(format)
+      toast.success('Equipment exported', `${count} record(s) saved as ${format === 'excel' ? 'Excel' : 'CSV'}.`)
     } catch (err) {
       toast.error('Export failed', err instanceof Error ? err.message : 'Could not export.')
     }
@@ -88,9 +89,7 @@ export default function EquipmentPage() {
         subtitle="Devices installed or supplied to customers, with warranty tracking."
         actions={
           <>
-            <button className="btn-secondary" onClick={onExport} disabled={!equipment?.length}>
-              <Download size={16} /> <span className="sr-only sm:not-sr-only">Export CSV</span>
-            </button>
+            <ExportButton onExport={onExport} disabled={!equipment?.length} />
             <button
               className="btn-primary"
               onClick={() => {

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   Bell,
+  Boxes,
   ChevronRight,
   CreditCard,
   FileText,
@@ -53,6 +54,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'Field & Sales',
     items: [
       { to: '/equipment', label: 'Products / Equipment', icon: HardDrive },
+      { to: '/stock', label: 'Stock', icon: Boxes },
       { to: '/calls', label: 'Call Book', icon: PhoneCall },
       { to: '/quotations', label: 'Quotations', icon: ScrollText },
     ],

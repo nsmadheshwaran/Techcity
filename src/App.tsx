@@ -19,6 +19,7 @@ import ServiceFormPage from '@/pages/ServiceFormPage'
 import ServiceDetailPage from '@/pages/ServiceDetailPage'
 import ReportsPage from '@/pages/ReportsPage'
 import EquipmentPage from '@/pages/EquipmentPage'
+import StockPage from '@/pages/StockPage'
 import CallsPage from '@/pages/CallsPage'
 import QuotationsPage from '@/pages/QuotationsPage'
 import QuotationFormPage from '@/pages/QuotationFormPage'
@@ -46,6 +47,7 @@ const router = createHashRouter([
       { path: 'services/:id', element: <ServiceDetailPage /> },
       { path: 'reports', element: <ReportsPage /> },
       { path: 'equipment', element: <EquipmentPage /> },
+      { path: 'stock', element: <StockPage /> },
       { path: 'calls', element: <CallsPage /> },
       { path: 'quotations', element: <QuotationsPage /> },
       { path: 'quotations/new', element: <QuotationFormPage key="quotation-new" /> },

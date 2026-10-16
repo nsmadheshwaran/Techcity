@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Download, Plus, Trash2, Wrench } from 'lucide-react'
+import { Plus, Trash2, Wrench } from 'lucide-react'
+import { ExportButton } from '@/components/ui/ExportButton'
 import { PageHeader } from '@/components/PageHeader'
 import { ServiceFilters, type FilterState } from '@/components/services/ServiceFilters'
 import { applyFilters, EMPTY_FILTERS } from '@/components/services/serviceFiltersHelper'
@@ -15,7 +16,7 @@ import { useSelection } from '@/components/ui/useSelection'
 import { useSort, useSorted } from '@/components/ui/useSort'
 import { useToast } from '@/components/ui/Toast'
 import { useCustomerMap, useServices, useSettings } from '@/hooks/useData'
-import { exportServicesCSV } from '@/services/backup'
+import { exportServicesCSV, type ExportFormat } from '@/services/backup'
 import { deleteService, setServiceStatus } from '@/services/services'
 import { SERVICE_STATUSES } from '@/types'
 import { formatDate, formatMoney } from '@/utils/format'
@@ -107,10 +108,10 @@ export default function ServicesPage() {
     [filtered],
   )
 
-  async function onExport() {
+  async function onExport(format: ExportFormat) {
     try {
-      const count = await exportServicesCSV()
-      toast.success('Services exported', `${count} record(s) saved as CSV.`)
+      const count = await exportServicesCSV(format)
+      toast.success('Services exported', `${count} record(s) saved as ${format === 'excel' ? 'Excel' : 'CSV'}.`)
     } catch (err) {
       toast.error('Export failed', err instanceof Error ? err.message : 'Could not export.')
     }
@@ -123,9 +124,7 @@ export default function ServicesPage() {
         subtitle={services ? `${services.length} service records` : 'Loading…'}
         actions={
           <>
-            <button className="btn-secondary" onClick={onExport} disabled={!services?.length}>
-              <Download size={14} /> <span className="sr-only sm:not-sr-only">Export CSV</span>
-            </button>
+            <ExportButton onExport={onExport} disabled={!services?.length} />
             <button className="btn-primary" onClick={() => navigate('/services/new')}>
               <Plus size={14} /> New Service
             </button>

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { CreditCard, Download, Search, Wallet, X } from 'lucide-react'
+import { CreditCard, Search, Wallet, X } from 'lucide-react'
+import { ExportButton } from '@/components/ui/ExportButton'
 import { PageHeader } from '@/components/PageHeader'
 import { PaymentModal } from '@/components/services/PaymentModal'
 import { PaymentBadge } from '@/components/ui/Badges'
@@ -10,7 +11,7 @@ import { usePagination } from '@/components/ui/usePagination'
 import { StatCard } from '@/components/StatCard'
 import { useToast } from '@/components/ui/Toast'
 import { useCustomerMap, usePayments, useServices, useSettings } from '@/hooks/useData'
-import { exportPaymentsCSV } from '@/services/backup'
+import { exportPaymentsCSV, type ExportFormat } from '@/services/backup'
 import type { Service } from '@/types'
 import { formatDate, formatMoney, monthKey, todayISO } from '@/utils/format'
 
@@ -82,10 +83,10 @@ export default function PaymentsPage() {
     tab === 'pending' ? pendingPage : txPage
   const serviceMap = useMemo(() => new Map((services ?? []).map((s) => [s.id, s])), [services])
 
-  async function onExport() {
+  async function onExport(format: ExportFormat) {
     try {
-      const count = await exportPaymentsCSV()
-      toast.success('Payments exported', `${count} transaction(s) saved as CSV.`)
+      const count = await exportPaymentsCSV(format)
+      toast.success('Payments exported', `${count} transaction(s) saved as ${format === 'excel' ? 'Excel' : 'CSV'}.`)
     } catch (err) {
       toast.error('Export failed', err instanceof Error ? err.message : 'Could not export.')
     }
@@ -97,9 +98,7 @@ export default function PaymentsPage() {
         title="Payments"
         subtitle="Track outstanding balances and every payment received."
         actions={
-          <button className="btn-secondary" onClick={onExport} disabled={!payments?.length}>
-            <Download size={16} /> <span className="sr-only sm:not-sr-only">Export CSV</span>
-          </button>
+          <ExportButton onExport={onExport} disabled={!payments?.length} />
         }
       />
 

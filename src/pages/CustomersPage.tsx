@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Download,
   Mail,
   MapPin,
   MessageCircle,
@@ -24,7 +23,8 @@ import { useSort, useSorted } from '@/components/ui/useSort'
 import { useToast } from '@/components/ui/Toast'
 import { useCustomersWithStats, useSettings } from '@/hooks/useData'
 import { deleteCustomer, searchCustomers } from '@/services/customers'
-import { exportCustomersCSV } from '@/services/backup'
+import { exportCustomersCSV, type ExportFormat } from '@/services/backup'
+import { ExportButton } from '@/components/ui/ExportButton'
 import { formatDate, formatMoney, initials, toWhatsAppNumber } from '@/utils/format'
 
 type CustomerSortKey = 'name' | 'phone' | 'city' | 'services' | 'spent' | 'outstanding' | 'last'
@@ -120,10 +120,10 @@ export default function CustomersPage() {
     }
   }
 
-  async function onExport() {
+  async function onExport(format: ExportFormat) {
     try {
-      const count = await exportCustomersCSV()
-      toast.success('Customers exported', `${count} record(s) saved as CSV.`)
+      const count = await exportCustomersCSV(format)
+      toast.success('Customers exported', `${count} record(s) saved as ${format === 'excel' ? 'Excel' : 'CSV'}.`)
     } catch (err) {
       toast.error('Export failed', err instanceof Error ? err.message : 'Could not export data.')
     }
@@ -149,9 +149,7 @@ export default function CustomersPage() {
         subtitle={customers ? `${customers.length} records in the directory` : 'Loading…'}
         actions={
           <>
-            <button className="btn-secondary" onClick={onExport} disabled={!customers?.length}>
-              <Download size={14} /> <span className="sr-only sm:not-sr-only">Export CSV</span>
-            </button>
+            <ExportButton onExport={onExport} disabled={!customers?.length} />
             <button className="btn-primary" onClick={() => setAddOpen(true)}>
               <UserPlus size={14} /> Add Customer
             </button>

@@ -10,12 +10,19 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'logo.svg', 'pwa-192x192.png', 'pwa-512x512.png'],
+      includeAssets: [
+        'favicon-32.png',
+        'favicon-64.png',
+        'apple-touch-icon.png',
+        'pwa-192x192.png',
+        'pwa-512x512.png',
+        'pwa-maskable-512.png',
+      ],
       manifest: {
         name: 'Tech City Technology - Service Management',
         short_name: 'TechCity CRM',
         description: 'Customer & Service Management System for Tech City Technology',
-        theme_color: '#1a37b5',
+        theme_color: '#1a4fe0',
         background_color: '#ffffff',
         display: 'standalone',
         orientation: 'any',
@@ -32,10 +39,12 @@ export default defineConfig({
             type: 'image/png',
           },
           {
-            src: 'pwa-512x512.png',
+            // Android crops maskable icons to a circle, so this one carries
+            // extra padding rather than reusing the tight 512.
+            src: 'pwa-maskable-512.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'any maskable',
+            purpose: 'maskable',
           },
         ],
       },

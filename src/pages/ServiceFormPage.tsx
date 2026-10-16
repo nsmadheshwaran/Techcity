@@ -41,6 +41,7 @@ const WARRANTY_OPTIONS = [
   '6 Months',
   '1 Year',
   '2 Years',
+  '3 Years',
 ]
 
 const DEVICE_OPTIONS = [

@@ -30,6 +30,7 @@ import {
   exportCustomersCSV,
   exportEquipmentCSV,
   exportPaymentsCSV,
+  exportProductsCSV,
   exportServicesCSV,
   restoreBackup,
   wipeAllData,
@@ -749,39 +750,40 @@ function BackupTab({ toast }: { toast: ToastApi }) {
       </section>
 
       <section className="card p-4 sm:p-5">
-        <h2 className="mb-1 text-[15px] font-semibold text-ink-900">Export to CSV</h2>
+        <h2 className="mb-1 text-[15px] font-semibold text-ink-900">Export Records</h2>
         <p className="mb-4 text-[13px] text-ink-500">
-          Open these in Excel or Google Sheets for accounting and reporting.
+          Download as CSV or as a real Excel (.xlsx) workbook for accounting and reporting.
         </p>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <button
-            className="btn-secondary justify-start"
-            disabled={busy !== null}
-            onClick={() => run('c', exportCustomersCSV, 'Customers exported')}
-          >
-            Export Customers
-          </button>
-          <button
-            className="btn-secondary justify-start"
-            disabled={busy !== null}
-            onClick={() => run('s', exportServicesCSV, 'Service records exported')}
-          >
-            Export Service Records
-          </button>
-          <button
-            className="btn-secondary justify-start"
-            disabled={busy !== null}
-            onClick={() => run('p', exportPaymentsCSV, 'Payments exported')}
-          >
-            Export Payments
-          </button>
-          <button
-            className="btn-secondary justify-start"
-            disabled={busy !== null}
-            onClick={() => run('e', exportEquipmentCSV, 'Equipment exported')}
-          >
-            Export Equipment
-          </button>
+        <div className="divide-y divide-line rounded-lg border border-line">
+          {(
+            [
+              ['c', 'Customers', exportCustomersCSV, 'Customers exported'],
+              ['s', 'Service Records', exportServicesCSV, 'Service records exported'],
+              ['p', 'Payments', exportPaymentsCSV, 'Payments exported'],
+              ['e', 'Equipment', exportEquipmentCSV, 'Equipment exported'],
+              ['pr', 'Stock', exportProductsCSV, 'Stock exported'],
+            ] as const
+          ).map(([key, label, fn, message]) => (
+            <div key={key} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+              <span className="text-[13px] font-medium text-ink-800">{label}</span>
+              <div className="flex gap-2">
+                <button
+                  className="btn-ghost px-2.5 py-1 text-[12.5px]"
+                  disabled={busy !== null}
+                  onClick={() => run(key, () => fn('csv'), message)}
+                >
+                  CSV
+                </button>
+                <button
+                  className="btn-ghost px-2.5 py-1 text-[12.5px]"
+                  disabled={busy !== null}
+                  onClick={() => run(key, () => fn('excel'), message)}
+                >
+                  Excel
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 

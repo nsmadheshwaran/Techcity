@@ -2,8 +2,18 @@ import { db, getSettings, nowISO, sortParts } from '@/lib/db'
 import type { CustomerContact, Expense, ServiceVisit } from '@/types'
 import type { Call, Customer, Equipment, Payment, Quotation, Reminder, Service, ServicePart } from '@/types'
 import { downloadCSV, downloadJSON, timestampSuffix } from '@/utils/csv'
+import { downloadXLSX } from '@/utils/xlsx'
 import { setSuppressJournal } from '@/services/sync'
 import { cloudEnabled, SYNC_TABLES } from '@/lib/cloud'
+
+export type ExportFormat = 'csv' | 'excel'
+
+/** Downloads `rows` as CSV or a real .xlsx, picking the right extension. */
+function exportRows(rows: Record<string, unknown>[], baseName: string, format: ExportFormat) {
+  const stamp = timestampSuffix()
+  if (format === 'excel') downloadXLSX(rows, `${baseName}-${stamp}.xlsx`)
+  else downloadCSV(rows, `${baseName}-${stamp}.csv`)
+}
 
 export interface BackupFile {
   app: 'tech-city-technology'
@@ -187,7 +197,7 @@ export async function restoreBackup(raw: string) {
   }
 }
 
-export async function exportCustomersCSV() {
+export async function exportCustomersCSV(format: ExportFormat = 'csv') {
   const customers = await db.customers.orderBy('code').toArray()
   const services = await db.services.toArray()
   const rows = customers.map((c) => {
@@ -212,11 +222,11 @@ export async function exportCustomersCSV() {
       Notes: c.notes ?? '',
     }
   })
-  downloadCSV(rows, `techcity-customers-${timestampSuffix()}.csv`)
+  exportRows(rows, 'techcity-customers', format)
   return rows.length
 }
 
-export async function exportServicesCSV() {
+export async function exportServicesCSV(format: ExportFormat = 'csv') {
   const [services, customers, parts] = await Promise.all([
     db.services.toArray(),
     db.customers.toArray(),
@@ -261,11 +271,11 @@ export async function exportServicesCSV() {
         Notes: s.notes ?? '',
       }
     })
-  downloadCSV(rows, `techcity-services-${timestampSuffix()}.csv`)
+  exportRows(rows, 'techcity-services', format)
   return rows.length
 }
 
-export async function exportPaymentsCSV() {
+export async function exportPaymentsCSV(format: ExportFormat = 'csv') {
   const [payments, customers, services] = await Promise.all([
     db.payments.toArray(),
     db.customers.toArray(),
@@ -284,11 +294,11 @@ export async function exportPaymentsCSV() {
       Method: p.method,
       Note: p.note ?? '',
     }))
-  downloadCSV(rows, `techcity-payments-${timestampSuffix()}.csv`)
+  exportRows(rows, 'techcity-payments', format)
   return rows.length
 }
 
-export async function exportEquipmentCSV() {
+export async function exportEquipmentCSV(format: ExportFormat = 'csv') {
   const [equipment, customers] = await Promise.all([db.equipment.toArray(), db.customers.toArray()])
   const byId = new Map(customers.map((c) => [c.id, c]))
   const rows = equipment.map((e) => ({
@@ -306,7 +316,26 @@ export async function exportEquipmentCSV() {
     Status: e.status,
     Notes: e.notes ?? '',
   }))
-  downloadCSV(rows, `techcity-equipment-${timestampSuffix()}.csv`)
+  exportRows(rows, 'techcity-equipment', format)
+  return rows.length
+}
+
+export async function exportProductsCSV(format: ExportFormat = 'csv') {
+  const products = await db.products.orderBy('code').toArray()
+  const rows = products.map((p) => ({
+    'Product ID': p.code,
+    Name: p.name,
+    Category: p.category ?? '',
+    Brand: p.brand ?? '',
+    Quantity: p.quantity,
+    Unit: p.unit ?? '',
+    'Cost Price': p.costPrice?.toFixed(2) ?? '',
+    'Sell Price': p.sellPrice?.toFixed(2) ?? '',
+    'Low Stock Alert': p.lowStockThreshold ?? '',
+    Location: p.location ?? '',
+    Notes: p.notes ?? '',
+  }))
+  exportRows(rows, 'techcity-stock', format)
   return rows.length
 }
 
@@ -318,6 +347,7 @@ export async function wipeAllData() {
     db.serviceParts.clear(),
     db.payments.clear(),
     db.equipment.clear(),
+    db.products.clear(),
     db.reminders.clear(),
     db.calls.clear(),
     db.quotations.clear(),

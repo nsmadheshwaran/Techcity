@@ -97,6 +97,13 @@ export function useEquipment(customerId?: string) {
   }, [customerId])
 }
 
+export function useProducts() {
+  return useLiveQuery(async () => {
+    const rows = await db.products.toArray()
+    return rows.sort((a, b) => a.name.localeCompare(b.name))
+  }, [])
+}
+
 export function useReminders(customerId?: string) {
   return useLiveQuery(async () => {
     const rows = customerId

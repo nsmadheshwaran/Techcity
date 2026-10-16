@@ -321,10 +321,11 @@ test('Dashboard statistics are computed from real data', async ({ page }) => {
   const buckets = await page.locator('h2').allTextContents()
   console.log(`✓ Reminder buckets rendered: ${buckets.filter((b) => b !== 'Reminders').join(', ')}`)
 
-  // CSV export works
+  // CSV export works (Export button opens a CSV/Excel menu)
   const csvDl = page.waitForEvent('download', { timeout: 20000 })
   await page.goto(BASE + '#/customers')
-  await page.getByRole('button', { name: 'Export CSV' }).click()
+  await page.getByRole('button', { name: 'Export' }).click()
+  await page.getByRole('menuitem', { name: 'Export as CSV' }).click()
   const csv = await csvDl
   fs.mkdirSync(DOWNLOADS, { recursive: true })
   const csvPath = path.join(DOWNLOADS, csv.suggestedFilename())
