@@ -12,6 +12,7 @@ import {
   Monitor,
   Save,
   Settings2,
+  Shield,
   Smartphone,
   Trash2,
   Upload,
@@ -559,6 +560,22 @@ function SecurityTab({ toast }: { toast: ToastApi }) {
             Remove passcode
           </button>
         )}
+      </div>
+
+      <div className="mt-6 rounded-lg border border-ink-200 bg-ink-50/70 p-4">
+        <div className="flex items-center gap-2 mb-2 text-ink-900 font-semibold text-[13.5px]">
+          <Shield size={16} className="text-brand-600" />
+          <span>Data Privacy &amp; Storage Architecture</span>
+        </div>
+        <p className="text-[12.5px] leading-relaxed text-ink-600 mb-3">
+          TechCity CRM is designed on a <strong>local-first privacy model</strong>. Your records remain private and secure:
+        </p>
+        <ul className="space-y-1.5 text-[12px] text-ink-600 list-disc list-inside">
+          <li><strong>Zero Third-Party Trackers:</strong> No advertising cookies, tracking pixels, or external analytics scripts are loaded.</li>
+          <li><strong>Local Browser Storage:</strong> Primary records live in this browser&apos;s IndexedDB database and survive offline reboots.</li>
+          <li><strong>Private Cloud Sync:</strong> Multi-device synchronization connects directly to your private Supabase backend protected by Row-Level Security (RLS).</li>
+          <li><strong>Total Data Ownership:</strong> You can export full JSON/CSV backups or wipe device records at any time from the Backup tab.</li>
+        </ul>
       </div>
     </section>
   )

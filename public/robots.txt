@@ -1,0 +1,4 @@
+# Tech City Technology — Private CRM
+# Block all web crawlers from indexing private customer & service records
+User-agent: *
+Disallow: /

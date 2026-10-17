@@ -132,6 +132,11 @@ function AppShell() {
     localStorage.setItem(COLLAPSE_KEY, String(collapsed))
   }, [collapsed])
 
+  useEffect(() => {
+    const parts = [crumb.leaf, crumb.module, 'Tech City CRM'].filter(Boolean)
+    document.title = parts.join(' · ')
+  }, [crumb])
+
   const pendingReminders = (reminders ?? []).filter(
     (r) => !r.done && (daysUntil(r.dueDate) ?? 99) <= 7,
   ).length
