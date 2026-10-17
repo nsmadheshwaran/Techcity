@@ -261,6 +261,23 @@ export interface Equipment extends BaseRow {
   location?: string
   status: EquipmentStatus
   notes?: string
+  /**
+   * Links a component (RAM, a hard disk, a camera on a shared DVR…) to the
+   * device it lives inside. A row with no parentEquipmentId is a top-level
+   * device; one set to another Equipment's id is one of its components.
+   * One level deep only — a component is never itself a parent, so the
+   * customer's equipment tab can always render a flat parent → children tree.
+   */
+  parentEquipmentId?: ID
+  /** Photo of the item itself or its serial plate — captured, not typed. */
+  photoDataUrl?: string
+  /**
+   * Login for this specific item (router admin, DVR/NVR, camera, Windows
+   * account…). Stored in plain text because the business needs to read it
+   * back on a service call — this is a local, single-device app with a
+   * passcode lock, not a multi-user web service.
+   */
+  password?: string
 }
 
 /* ------------------------------------------------------------------ */

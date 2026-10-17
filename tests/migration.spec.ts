@@ -104,8 +104,8 @@ test('v1 database upgrades to v2 without losing data', async ({ page }) => {
     db.close()
     return { version, positions: rows.map((r: { name: string; position?: number }) => [r.name, r.position]) }
   })
-  // Bumped to v7 for the products (shop stock) table; unrelated to this upgrade path.
-  expect(positions.version).toBe(7)
+  // Bumped to v8 for equipment.parentEquipmentId (components); unrelated to this upgrade path.
+  expect(positions.version).toBe(8)
   expect(positions.positions.sort((a: [string, number], b: [string, number]) => a[1] - b[1]))
     .toEqual([['Zulu Camera', 0], ['Alpha Cable', 1], ['Mike Adapter', 2]])
   console.log(`✓ Database upgraded to v${positions.version} and positions were backfilled 0,1,2`)

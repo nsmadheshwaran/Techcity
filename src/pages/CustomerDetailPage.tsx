@@ -4,6 +4,7 @@ import {
   CalendarClock,
   CreditCard,
   Download,
+  Camera,
   Eye,
   EyeOff,
   HardDrive,
@@ -24,6 +25,7 @@ import { CustomerFormModal } from '@/components/customers/CustomerFormModal'
 import { ServiceTimeline } from '@/components/customers/ServiceTimeline'
 import { EquipmentFormModal } from '@/components/equipment/EquipmentFormModal'
 import { EquipmentBadge, StatusBadge } from '@/components/ui/Badges'
+import { PhotoZoomOverlay } from '@/components/ui/PhotoPicker'
 import { EmptyState, LoadingState } from '@/components/ui/States'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useToast } from '@/components/ui/Toast'
@@ -39,6 +41,7 @@ import {
   useSettings,
 } from '@/hooks/useData'
 import { computeStats, deleteCustomer } from '@/services/customers'
+import type { Equipment } from '@/types'
 import { deleteEquipment } from '@/services/equipment'
 import {
   formatDate,
@@ -67,6 +70,9 @@ export default function CustomerDetailPage() {
   const servicePartMap = useServicePartsForServiceIds((services ?? []).map((s) => s.id))
   const [editOpen, setEditOpen] = useState(false)
   const [equipmentOpen, setEquipmentOpen] = useState(false)
+  const [editingEquipment, setEditingEquipment] = useState<Equipment | undefined>()
+  const [componentParent, setComponentParent] = useState<Equipment | undefined>()
+  const [revealedEquipmentIds, setRevealedEquipmentIds] = useState<Set<string>>(new Set())
   const [tab, setTab] = useState<
     'contacts' | 'history' | 'timeline' | 'equipment' | 'reminders' | 'calls'
   >('contacts')
@@ -74,6 +80,37 @@ export default function CustomerDetailPage() {
   const [reportMonth, setReportMonth] = useState(() => monthKey(todayISO()))
 
   const stats = useMemo(() => computeStats(services ?? []), [services])
+
+  // Equipment renders as a two-level tree: a parent device (no
+  // parentEquipmentId) with its components — RAM, a hard disk, a camera on a
+  // shared DVR — nested beneath it. Anything whose stated parent no longer
+  // exists (the parent having been deleted through some other path) falls
+  // back to showing as a standalone device, so a record can never vanish.
+  const equipmentParents = useMemo(() => {
+    const all = equipment ?? []
+    const ids = new Set(all.map((e) => e.id))
+    return all.filter((e) => !e.parentEquipmentId || !ids.has(e.parentEquipmentId))
+  }, [equipment])
+  const equipmentChildren = useMemo(() => {
+    const map = new Map<string, typeof equipmentParents>()
+    for (const e of equipment ?? []) {
+      if (!e.parentEquipmentId || !equipmentParents.some((p) => p.id === e.parentEquipmentId)) continue
+      const list = map.get(e.parentEquipmentId) ?? []
+      list.push(e)
+      map.set(e.parentEquipmentId, list)
+    }
+    return map
+  }, [equipment, equipmentParents])
+
+  const [zoomPhoto, setZoomPhoto] = useState<string | null>(null)
+  function toggleRevealed(id: string) {
+    setRevealedEquipmentIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   // Internal buy-vs-sell rollup: what the shop paid for parts sold/installed
   // for this customer and the resulting profit. Only parts with an entered
@@ -177,10 +214,13 @@ export default function CustomerDetailPage() {
     }
   }
 
-  async function onDeleteEquipment(eqId: string, label: string) {
+  async function onDeleteEquipment(eqId: string, label: string, componentCount = 0) {
     const ok = await confirm({
       title: 'Delete equipment record?',
-      message: `${label} will be removed from this customer.`,
+      message:
+        componentCount > 0
+          ? `${label} and its ${componentCount} component${componentCount === 1 ? '' : 's'} will be removed from this customer.`
+          : `${label} will be removed from this customer.`,
       confirmLabel: 'Delete',
       danger: true,
     })
@@ -628,7 +668,14 @@ export default function CustomerDetailPage() {
             {tab === 'equipment' && (
               <>
                 <div className="flex justify-end border-b border-ink-100 px-4 py-2.5">
-                  <button className="btn-secondary py-1.5" onClick={() => setEquipmentOpen(true)}>
+                  <button
+                    className="btn-secondary py-1.5"
+                    onClick={() => {
+                      setEditingEquipment(undefined)
+                      setComponentParent(undefined)
+                      setEquipmentOpen(true)
+                    }}
+                  >
                     <Plus size={15} /> Add Equipment
                   </button>
                 </div>
@@ -636,46 +683,69 @@ export default function CustomerDetailPage() {
                   <EmptyState
                     icon={HardDrive}
                     title="No equipment recorded"
-                    message="Track cameras, DVRs, computers and other devices installed for this customer."
+                    message="Track cameras, DVRs, computers and other devices installed for this customer — and their components, like the RAM or hard disk inside a PC."
                     action={
-                      <button className="btn-primary" onClick={() => setEquipmentOpen(true)}>
+                      <button
+                        className="btn-primary"
+                        onClick={() => {
+                          setEditingEquipment(undefined)
+                          setComponentParent(undefined)
+                          setEquipmentOpen(true)
+                        }}
+                      >
                         <Plus size={16} /> Add Equipment
                       </button>
                     }
                   />
                 ) : (
                   <ul className="divide-y divide-line-soft">
-                    {equipment.map((e) => (
-                      <li key={e.id} className="flex items-start gap-3 px-4 py-3.5">
-                        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-ink-100 text-ink-500">
-                          <HardDrive size={16} />
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-[14px] font-semibold text-ink-900">
-                              {e.productType}
-                              {e.brand ? ` · ${e.brand}` : ''}
-                            </p>
-                            <EquipmentBadge status={e.status} />
-                          </div>
-                          <p className="mt-0.5 text-[12.5px] text-ink-600">
-                            {[e.model, e.serialNumber && `SN: ${e.serialNumber}`, e.location]
-                              .filter(Boolean)
-                              .join(' · ')}
-                          </p>
-                          <p className="mt-0.5 text-[12px] text-ink-500">
-                            {e.installationDate ? `Installed: ${formatDate(e.installationDate)}` : ''}
-                            {e.warrantyPeriod ? ` · Warranty: ${e.warrantyPeriod}` : ''}
-                            {e.warrantyExpiry ? ` (till ${formatDate(e.warrantyExpiry)})` : ''}
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => onDeleteEquipment(e.id, `${e.productType} ${e.brand ?? ''}`)}
-                          className="btn-ghost shrink-0 px-2 text-red-600 hover:bg-red-50"
-                          aria-label="Delete equipment"
-                        >
-                          <Trash2 size={15} />
-                        </button>
+                    {equipmentParents.map((e) => (
+                      <li key={e.id}>
+                        <EquipmentRow
+                          item={e}
+                          revealed={revealedEquipmentIds.has(e.id)}
+                          onToggleReveal={() => toggleRevealed(e.id)}
+                          onZoomPhoto={() => setZoomPhoto(e.photoDataUrl ?? null)}
+                          onEdit={() => {
+                            setEditingEquipment(e)
+                            setComponentParent(undefined)
+                            setEquipmentOpen(true)
+                          }}
+                          onDelete={() =>
+                            onDeleteEquipment(
+                              e.id,
+                              `${e.productType} ${e.brand ?? ''}`,
+                              (equipmentChildren.get(e.id) ?? []).length,
+                            )
+                          }
+                          onAddComponent={() => {
+                            setEditingEquipment(undefined)
+                            setComponentParent(e)
+                            setEquipmentOpen(true)
+                          }}
+                        />
+                        {(equipmentChildren.get(e.id) ?? []).length > 0 && (
+                          <ul className="divide-y divide-line-soft border-t border-dashed border-line-soft bg-ink-50/40 pl-8">
+                            {(equipmentChildren.get(e.id) ?? []).map((child) => (
+                              <li key={child.id}>
+                                <EquipmentRow
+                                  item={child}
+                                  revealed={revealedEquipmentIds.has(child.id)}
+                                  onToggleReveal={() => toggleRevealed(child.id)}
+                                  onZoomPhoto={() => setZoomPhoto(child.photoDataUrl ?? null)}
+                                  onEdit={() => {
+                                    setEditingEquipment(child)
+                                    setComponentParent(undefined)
+                                    setEquipmentOpen(true)
+                                  }}
+                                  onDelete={() =>
+                                    onDeleteEquipment(child.id, `${child.productType} ${child.brand ?? ''}`, 0)
+                                  }
+                                />
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -820,10 +890,122 @@ export default function CustomerDetailPage() {
       <CustomerFormModal open={editOpen} onClose={() => setEditOpen(false)} customer={customer} />
       <EquipmentFormModal
         open={equipmentOpen}
-        onClose={() => setEquipmentOpen(false)}
+        onClose={() => {
+          setEquipmentOpen(false)
+          setEditingEquipment(undefined)
+          setComponentParent(undefined)
+        }}
+        equipment={editingEquipment}
         defaultCustomerId={customer.id}
+        defaultParentEquipmentId={componentParent?.id}
       />
+
+      {zoomPhoto && (
+        <PhotoZoomOverlay src={zoomPhoto} alt="Equipment photo" onClose={() => setZoomPhoto(null)} />
+      )}
     </>
+  )
+}
+
+/**
+ * One row in the equipment tree — a parent device or one of its components.
+ * Used for both so the two levels look consistent, just indented.
+ */
+function EquipmentRow({
+  item,
+  revealed,
+  onToggleReveal,
+  onZoomPhoto,
+  onEdit,
+  onDelete,
+  onAddComponent,
+}: {
+  item: Equipment
+  revealed: boolean
+  onToggleReveal: () => void
+  onZoomPhoto: () => void
+  onEdit: () => void
+  onDelete: () => void
+  onAddComponent?: () => void
+}) {
+  return (
+    <div className="flex items-start gap-3 px-4 py-3">
+      {item.photoDataUrl ? (
+        <button
+          type="button"
+          onClick={onZoomPhoto}
+          className="group relative h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-ink-200"
+          aria-label={`View photo of ${item.productType}`}
+        >
+          <img src={item.photoDataUrl} alt="" className="h-full w-full object-cover" />
+          <span className="absolute inset-0 hidden items-center justify-center bg-ink-950/40 text-white group-hover:flex">
+            <Camera size={14} />
+          </span>
+        </button>
+      ) : (
+        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-ink-100 text-ink-500">
+          <HardDrive size={16} />
+        </span>
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-[14px] font-semibold text-ink-900">
+            {item.productType}
+            {item.brand ? ` · ${item.brand}` : ''}
+          </p>
+          <EquipmentBadge status={item.status} />
+        </div>
+        <p className="mt-0.5 text-[12.5px] text-ink-600">
+          {[item.model, item.serialNumber && `SN: ${item.serialNumber}`, item.location]
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
+        <p className="mt-0.5 text-[12px] text-ink-500">
+          {item.installationDate ? `Installed: ${formatDate(item.installationDate)}` : ''}
+          {item.warrantyPeriod ? ` · Warranty: ${item.warrantyPeriod}` : ''}
+          {item.warrantyExpiry ? ` (till ${formatDate(item.warrantyExpiry)})` : ''}
+        </p>
+        {item.password && (
+          <p className="mt-1 flex items-center gap-1.5 text-[12.5px]">
+            <Lock size={11} className="shrink-0 text-ink-400" />
+            <span className="font-mono text-ink-700">
+              {revealed ? item.password : '••••••••'}
+            </span>
+            <button
+              type="button"
+              onClick={onToggleReveal}
+              className="text-ink-400 hover:text-ink-700"
+              aria-label={revealed ? 'Hide password' : 'Show password'}
+            >
+              {revealed ? <EyeOff size={13} /> : <Eye size={13} />}
+            </button>
+          </p>
+        )}
+        {item.notes && <p className="mt-1 text-[12px] italic text-ink-500">{item.notes}</p>}
+      </div>
+      <div className="flex shrink-0 items-center gap-0.5">
+        {onAddComponent && (
+          <button
+            onClick={onAddComponent}
+            className="btn-ghost px-2"
+            aria-label={`Add a component to ${item.productType}`}
+            title="Add component (RAM, hard disk…)"
+          >
+            <Plus size={15} />
+          </button>
+        )}
+        <button onClick={onEdit} className="btn-ghost px-2" aria-label="Edit equipment">
+          <Pencil size={15} />
+        </button>
+        <button
+          onClick={onDelete}
+          className="btn-ghost px-2 text-red-600 hover:bg-red-50"
+          aria-label="Delete equipment"
+        >
+          <Trash2 size={15} />
+        </button>
+      </div>
+    </div>
   )
 }
 

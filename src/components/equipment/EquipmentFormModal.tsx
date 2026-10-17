@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
-import { Save } from 'lucide-react'
+import { useEffect, useId, useState } from 'react'
+import { Eye, EyeOff, Save } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { ComboField, SelectField, TextAreaField, TextField } from '@/components/ui/Field'
+import { PhotoPicker, PhotoZoomOverlay } from '@/components/ui/PhotoPicker'
 import { useToast } from '@/components/ui/Toast'
 import { createEquipment, updateEquipment } from '@/services/equipment'
-import { useCustomers, useSettingsWithStatus } from '@/hooks/useData'
+import { useCustomers, useEquipment, useSettingsWithStatus } from '@/hooks/useData'
 import { EQUIPMENT_STATUSES, type Equipment } from '@/types'
 import { todayISO, warrantyExpiryFrom } from '@/utils/format'
 
@@ -19,6 +20,8 @@ const PRODUCT_TYPES = [
   'Switch',
   'UPS',
   'Hard Disk',
+  'RAM',
+  'Motherboard',
   'Monitor',
   'Other',
 ]
@@ -30,16 +33,29 @@ interface Props {
   onClose: () => void
   equipment?: Equipment
   defaultCustomerId?: string
+  /** Pre-selects a parent device — used by "Add Component" on an existing device. */
+  defaultParentEquipmentId?: string
   onSaved?: (e: Equipment) => void
 }
 
-export function EquipmentFormModal({ open, onClose, equipment, defaultCustomerId, onSaved }: Props) {
+export function EquipmentFormModal({
+  open,
+  onClose,
+  equipment,
+  defaultCustomerId,
+  defaultParentEquipmentId,
+  onSaved,
+}: Props) {
   const toast = useToast()
+  const passwordId = useId()
   const customers = useCustomers()
   const { settings, loaded: settingsLoaded } = useSettingsWithStatus()
   const [saving, setSaving] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [zoomPhoto, setZoomPhoto] = useState(false)
   const [form, setForm] = useState({
     customerId: '',
+    parentEquipmentId: '',
     productType: 'Camera',
     brand: '',
     model: '',
@@ -48,16 +64,28 @@ export function EquipmentFormModal({ open, onClose, equipment, defaultCustomerId
     warrantyPeriod: settings.defaultWarrantyPeriod || '1 Year',
     location: '',
     status: 'Active' as Equipment['status'],
+    password: '',
+    photoDataUrl: '',
     notes: '',
   })
   const [error, setError] = useState('')
 
+  // Candidate parent devices: every top-level item (no parent of its own)
+  // belonging to the same customer, excluding this record itself. One level
+  // of nesting only, so a component can never become a parent.
+  const customerEquipment = useEquipment(form.customerId || undefined)
+  const parentOptions = (customerEquipment ?? []).filter(
+    (e) => !e.parentEquipmentId && e.id !== equipment?.id,
+  )
+
   useEffect(() => {
     if (!open || !settingsLoaded) return
     setError('')
+    setShowPassword(false)
     if (equipment) {
       setForm({
         customerId: equipment.customerId,
+        parentEquipmentId: equipment.parentEquipmentId ?? '',
         productType: equipment.productType,
         brand: equipment.brand ?? '',
         model: equipment.model ?? '',
@@ -66,12 +94,15 @@ export function EquipmentFormModal({ open, onClose, equipment, defaultCustomerId
         warrantyPeriod: equipment.warrantyPeriod ?? '',
         location: equipment.location ?? '',
         status: equipment.status,
+        password: equipment.password ?? '',
+        photoDataUrl: equipment.photoDataUrl ?? '',
         notes: equipment.notes ?? '',
       })
     } else {
       setForm((f) => ({
         ...f,
         customerId: defaultCustomerId ?? '',
+        parentEquipmentId: defaultParentEquipmentId ?? '',
         productType: 'Camera',
         brand: '',
         model: '',
@@ -80,12 +111,22 @@ export function EquipmentFormModal({ open, onClose, equipment, defaultCustomerId
         warrantyPeriod: settings.defaultWarrantyPeriod || '1 Year',
         location: '',
         status: 'Active',
+        password: '',
+        photoDataUrl: '',
         notes: '',
       }))
     }
-  }, [open, equipment, defaultCustomerId, settings.defaultWarrantyPeriod, settingsLoaded])
+  }, [
+    open,
+    equipment,
+    defaultCustomerId,
+    defaultParentEquipmentId,
+    settings.defaultWarrantyPeriod,
+    settingsLoaded,
+  ])
 
   const expiry = warrantyExpiryFrom(form.installationDate, form.warrantyPeriod)
+  const parent = parentOptions.find((p) => p.id === form.parentEquipmentId)
 
   async function save() {
     if (!form.customerId) {
@@ -101,6 +142,7 @@ export function EquipmentFormModal({ open, onClose, equipment, defaultCustomerId
     try {
       const payload = {
         customerId: form.customerId,
+        parentEquipmentId: form.parentEquipmentId || undefined,
         productType: form.productType.trim(),
         brand: form.brand.trim() || undefined,
         model: form.model.trim() || undefined,
@@ -109,6 +151,8 @@ export function EquipmentFormModal({ open, onClose, equipment, defaultCustomerId
         warrantyPeriod: form.warrantyPeriod.trim() || undefined,
         location: form.location.trim() || undefined,
         status: form.status,
+        password: form.password.trim() || undefined,
+        photoDataUrl: form.photoDataUrl || undefined,
         notes: form.notes.trim() || undefined,
       }
       const saved = equipment
@@ -130,8 +174,8 @@ export function EquipmentFormModal({ open, onClose, equipment, defaultCustomerId
     <Modal
       open={open}
       onClose={onClose}
-      title={equipment ? `Edit ${equipment.code}` : 'Add Equipment'}
-      description="Track devices installed at a customer site."
+      title={equipment ? `Edit ${equipment.code}` : parent ? `Add Component to ${parent.productType}` : 'Add Equipment'}
+      description="Track devices and their components installed at a customer site."
       size="md"
       footer={
         <>
@@ -154,7 +198,9 @@ export function EquipmentFormModal({ open, onClose, equipment, defaultCustomerId
           label="Customer"
           required
           value={form.customerId}
-          onChange={(e) => setForm((f) => ({ ...f, customerId: e.target.value }))}
+          onChange={(e) =>
+            setForm((f) => ({ ...f, customerId: e.target.value, parentEquipmentId: '' }))
+          }
           className="sm:col-span-2"
           disabled={Boolean(equipment)}
         >
@@ -162,6 +208,23 @@ export function EquipmentFormModal({ open, onClose, equipment, defaultCustomerId
           {(customers ?? []).map((c) => (
             <option key={c.id} value={c.id}>
               {c.name} — {c.phone}
+            </option>
+          ))}
+        </SelectField>
+
+        <SelectField
+          label="Part Of"
+          hint="Leave blank for a standalone device. Pick a device here to record this as one of its components — a RAM stick, a hard disk, a camera on a shared DVR."
+          value={form.parentEquipmentId}
+          onChange={(e) => setForm((f) => ({ ...f, parentEquipmentId: e.target.value }))}
+          className="sm:col-span-2"
+          disabled={!form.customerId}
+        >
+          <option value="">— Standalone device —</option>
+          {parentOptions.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.productType}
+              {p.brand ? ` · ${p.brand}` : ''} ({p.code})
             </option>
           ))}
         </SelectField>
@@ -219,6 +282,42 @@ export function EquipmentFormModal({ open, onClose, equipment, defaultCustomerId
           onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as Equipment['status'] }))}
           options={EQUIPMENT_STATUSES}
         />
+
+        <div>
+          <label className="field-label" htmlFor={passwordId}>
+            Login / Password
+          </label>
+          <div className="relative">
+            <input
+              id={passwordId}
+              className="input pr-10"
+              type={showPassword ? 'text' : 'password'}
+              placeholder="Router admin / DVR / Windows login"
+              value={form.password}
+              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((s) => !s)}
+              className="absolute inset-y-0 right-0 flex items-center px-3 text-ink-400 hover:text-ink-700"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+            >
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+          <p className="mt-1 text-[12px] text-ink-500">Specific to this item. Revealed with the eye icon.</p>
+        </div>
+
+        <div className="sm:col-span-2">
+          <label className="field-label">Photo</label>
+          <PhotoPicker
+            photo={form.photoDataUrl || undefined}
+            onPicked={(dataUrl) => setForm((f) => ({ ...f, photoDataUrl: dataUrl ?? '' }))}
+            onZoom={() => setZoomPhoto(true)}
+            label={form.productType || 'equipment'}
+          />
+        </div>
+
         <TextAreaField
           label="Notes"
           value={form.notes}
@@ -227,6 +326,14 @@ export function EquipmentFormModal({ open, onClose, equipment, defaultCustomerId
           className="sm:col-span-2"
         />
       </div>
+
+      {zoomPhoto && form.photoDataUrl && (
+        <PhotoZoomOverlay
+          src={form.photoDataUrl}
+          alt={`Photo of ${form.productType || 'equipment'}`}
+          onClose={() => setZoomPhoto(false)}
+        />
+      )}
     </Modal>
   )
 }

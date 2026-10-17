@@ -45,6 +45,8 @@ export async function updateEquipment(id: string, patch: Partial<Equipment>) {
   return updated
 }
 
+/** Deletes an equipment record and, if it is a parent device, its components too. */
 export async function deleteEquipment(id: string) {
-  await db.equipment.delete(id)
+  const children = await db.equipment.where('parentEquipmentId').equals(id).toArray()
+  await db.equipment.bulkDelete([id, ...children.map((c) => c.id)])
 }

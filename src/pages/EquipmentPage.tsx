@@ -24,6 +24,10 @@ type EquipmentSortKey = 'product' | 'customer' | 'serial' | 'installed' | 'warra
 export default function EquipmentPage() {
   const equipment = useEquipment()
   const customerMap = useCustomerMap()
+  const equipmentMap = useMemo(
+    () => new Map((equipment ?? []).map((e) => [e.id, e])),
+    [equipment],
+  )
   const toast = useToast()
   const confirm = useConfirm()
   const [query, setQuery] = useState('')
@@ -185,6 +189,11 @@ export default function EquipmentPage() {
                           <p className="text-[12px] text-ink-500">
                             {e.model || e.code}
                           </p>
+                          {e.parentEquipmentId && equipmentMap.get(e.parentEquipmentId) && (
+                            <p className="text-[11px] text-ink-400">
+                              ↳ Part of {equipmentMap.get(e.parentEquipmentId)!.productType}
+                            </p>
+                          )}
                         </td>
                         <td className="table-td">
                           {c ? (
@@ -294,6 +303,11 @@ export default function EquipmentPage() {
                           {e.installationDate ? `Installed ${formatDate(e.installationDate)}` : ''}
                           {e.warrantyExpiry ? ` · Warranty till ${formatDate(e.warrantyExpiry)}` : ''}
                         </p>
+                        {e.parentEquipmentId && equipmentMap.get(e.parentEquipmentId) && (
+                          <p className="mt-0.5 text-[11.5px] text-ink-400">
+                            ↳ Part of {equipmentMap.get(e.parentEquipmentId)!.productType}
+                          </p>
+                        )}
                       </div>
                       <div className="flex shrink-0 flex-col gap-1">
                         <button

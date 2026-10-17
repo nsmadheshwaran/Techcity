@@ -111,6 +111,15 @@ export class TechCityDB extends Dexie {
     this.version(7).stores({
       products: 'id, code, name, category, quantity, createdAt, isDemo',
     })
+
+    // v8 — equipment gained parentEquipmentId, so a device's internal parts
+    // (RAM, a hard disk…) can be recorded as their own equipment rows nested
+    // under it. photoDataUrl and password are additive row fields needing no
+    // index (undefined = not set).
+    this.version(8).stores({
+      equipment:
+        'id, code, customerId, parentEquipmentId, productType, status, warrantyExpiry, createdAt, isDemo',
+    })
   }
 }
 

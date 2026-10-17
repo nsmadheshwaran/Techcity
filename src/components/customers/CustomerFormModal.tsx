@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { Eye, EyeOff, Plus, Save, Trash2 } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { TextAreaField, TextField } from '@/components/ui/Field'
@@ -47,6 +47,7 @@ const BLANK = {
 
 export function CustomerFormModal({ open, onClose, onSaved, customer, initial }: Props) {
   const toast = useToast()
+  const passwordId = useId()
   const [form, setForm] = useState({ ...BLANK })
   const [contacts, setContacts] = useState<ContactRow[]>([])
   const [errors, setErrors] = useState<Errors<typeof BLANK>>({})
@@ -271,9 +272,12 @@ export function CustomerFormModal({ open, onClose, onSaved, customer, initial }:
           placeholder="Optional"
         />
         <div>
-          <label className="field-label">Equipment Password</label>
+          <label className="field-label" htmlFor={passwordId}>
+            Equipment Password
+          </label>
           <div className="relative">
             <input
+              id={passwordId}
               className="input pr-10"
               type={showPassword ? 'text' : 'password'}
               placeholder="Camera / DVR / network password"
