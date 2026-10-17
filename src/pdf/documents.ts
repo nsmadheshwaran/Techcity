@@ -321,6 +321,7 @@ export function buildQuotationDocument(input: QuotationDocInput): jsPDF {
       textColor: INK,
       lineColor: LINE,
       lineWidth: 0.15,
+      overflow: 'linebreak',
     },
     headStyles: {
       textColor: INK,
@@ -333,7 +334,7 @@ export function buildQuotationDocument(input: QuotationDocInput): jsPDF {
     },
     columnStyles: {
       0: { cellWidth: 10, halign: 'center' },
-      1: { cellWidth: 'auto', halign: 'left' },
+      1: { cellWidth: 68, halign: 'left', overflow: 'linebreak' },
       2: { cellWidth: 15, halign: 'center' },
       3: { cellWidth: 20, halign: 'center' },
       4: { cellWidth: 18, halign: 'right' },
@@ -415,13 +416,6 @@ export function buildChallanDocument(input: DocInput): jsPDF {
   })
 
   const topY = 9
-  const outerH = 277
-  const bottomY = topY + outerH
-
-  // Outer border
-  doc.setDrawColor(...LINE)
-  doc.setLineWidth(0.3)
-  doc.rect(M, topY, CONTENT_W, outerH, 'S')
 
   // Top header box
   const headerH = 26
@@ -704,7 +698,9 @@ export function buildChallanDocument(input: DocInput): jsPDF {
   cy += 7.5
   doc.line(M, cy, M + CONTENT_W, cy)
 
-  // Signatures
+  // Signatures - reduced gap
+  const sigH = 26
+  const bottomY = cy + sigH
   doc.line(M + 95, cy, M + 95, bottomY)
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7.8)
@@ -712,8 +708,13 @@ export function buildChallanDocument(input: DocInput): jsPDF {
   doc.text('Company Seal and Date', M + 2, bottomY - 3)
 
   const techName = service.technician ? ` (${clean(service.technician)})` : ''
-  doc.text(clean(settings.name || 'TECH CITY TECHNOLOGY'), M + 98, cy + 5)
+  doc.text(`for ${clean(settings.name || 'TECH CITY TECHNOLOGY')}`, M + 98, cy + 5)
   doc.text(`Service Engineer Sign${techName}`, M + 98, bottomY - 3)
+
+  // Outer border enclosing the form neatly without excessive gap
+  doc.setDrawColor(...LINE)
+  doc.setLineWidth(0.3)
+  doc.rect(M, topY, CONTENT_W, bottomY - topY, 'S')
 
   return doc
 }
@@ -819,7 +820,7 @@ export function buildInvoiceDocument(input: DocInput): jsPDF {
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(7.6)
     doc.setTextColor(...INK)
-    doc.text(clean(val1), splitX + 2, ry + 5.8)
+    doc.text(clean(val1), splitX + 2, ry + 5.8, { maxWidth: 42 })
 
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(6.8)
@@ -828,7 +829,7 @@ export function buildInvoiceDocument(input: DocInput): jsPDF {
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(7.6)
     doc.setTextColor(...INK)
-    doc.text(clean(val2), rMidX + 2, ry + 5.8)
+    doc.text(clean(val2), rMidX + 2, ry + 5.8, { maxWidth: 45 })
   }
 
   metaCell(0, 'Invoice No.', invNumber, 'Dated', formatDateShort(service.serviceDate))
@@ -843,7 +844,7 @@ export function buildInvoiceDocument(input: DocInput): jsPDF {
   doc.setFontSize(6.8)
   doc.text('Terms of Delivery', splitX + 2, topY + 6 * rRowH + 2.6)
   doc.setFont('helvetica', 'bold')
-  doc.text('Delivered in Good Condition', splitX + 2, topY + 6 * rRowH + 5.8)
+  doc.text('Delivered in Good Condition', splitX + 2, topY + 6 * rRowH + 5.8, { maxWidth: 88 })
 
   // 2. Consignee (Ship to) & Buyer (Bill to) section
   const buyerH = 34
@@ -860,7 +861,7 @@ export function buildInvoiceDocument(input: DocInput): jsPDF {
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8.5)
     doc.setTextColor(...INK)
-    doc.text(clean(customer.name), x + 2, buyerY + 8.5)
+    doc.text(clean(customer.name), x + 2, buyerY + 8.5, { maxWidth: splitX - M - 4 })
 
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(7.2)
@@ -868,11 +869,11 @@ export function buildInvoiceDocument(input: DocInput): jsPDF {
     const lines = doc.splitTextToSize(clean(addr), splitX - M - 4) as string[]
     let py = buyerY + 12.5
     for (const l of lines.slice(0, 3)) {
-      doc.text(l, x + 2, py)
+      doc.text(l, x + 2, py, { maxWidth: splitX - M - 4 })
       py += 3.2
     }
-    doc.text(`GSTIN/UIN : ${clean(customer.gstNumber || '33AAIFJ1916C1ZV')}`, x + 2, buyerY + 28)
-    doc.text('State Name : Tamil Nadu, Code : 33', x + 2, buyerY + 31.8)
+    doc.text(`GSTIN/UIN : ${clean(customer.gstNumber || '33AAIFJ1916C1ZV')}`, x + 2, buyerY + 28, { maxWidth: splitX - M - 4 })
+    doc.text('State Name : Tamil Nadu, Code : 33', x + 2, buyerY + 31.8, { maxWidth: splitX - M - 4 })
   }
 
   drawPartyBlock(M, 'Consignee (Ship to)')
@@ -993,7 +994,7 @@ export function buildInvoiceDocument(input: DocInput): jsPDF {
   doc.setFontSize(7.6)
   doc.text('Amount Chargeable (in words)', M + 2, wordsY - 2.5)
   doc.setFont('helvetica', 'bold')
-  doc.text(`INR ${numberToWordsIndian(service.totalAmount)} Only`, M + 2, wordsY + 1.5)
+  doc.text(`INR ${numberToWordsIndian(service.totalAmount)} Only`, M + 2, wordsY + 1.5, { maxWidth: CONTENT_W - 35 })
   doc.text('E. & O.E', M + CONTENT_W - 3, wordsY - 1, { align: 'right' })
 
   // 4. HSN/SAC Tax Summary Table
@@ -1045,6 +1046,7 @@ export function buildInvoiceDocument(input: DocInput): jsPDF {
     `Tax Amount (in words) : INR ${numberToWordsIndian(totalTax)} Only (Tax / GST (${taxPct}%))`,
     M + 2,
     hsnEndY + 3.8,
+    { maxWidth: CONTENT_W - 4 },
   )
 
   // 5. Declaration, Bank Details & Signature bottom box
@@ -1106,18 +1108,9 @@ export function buildInvoiceDocument(input: DocInput): jsPDF {
   // Right Signatory & Payment Stamp
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7.5)
-  doc.text(`for ${clean(settings.name || 'TECHCITY TECHNOLOGY')}`, M + CONTENT_W - 3, declY + 4, { align: 'right' })
+  doc.text(`for ${clean(settings.name || 'TECHCITY TECHNOLOGY')}`, M + CONTENT_W - 3, declY + 4, { align: 'right', maxWidth: 55 })
 
-  // Status Stamp
-  const paidStatus = (service.paymentStatus || 'Paid').toUpperCase()
-  const stampColor: [number, number, number] = paidStatus === 'PAID' ? [16, 133, 90] : [190, 45, 45]
-  doc.setDrawColor(...stampColor)
-  doc.setLineWidth(0.4)
-  doc.rect(authX + 4, declY + 8, 26, 6.5, 'S')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7)
-  doc.setTextColor(...stampColor)
-  doc.text(paidStatus, authX + 17, declY + 12.5, { align: 'center' })
+
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7.2)
@@ -1353,6 +1346,10 @@ export function buildCustomerHistoryDocument(input: CustomerHistoryInput): jsPDF
     formatAmount(Math.max(0, s.balance)),
   ])
 
+  if (rows.length === 0) {
+    rows.push(['—', 'No service records found', '—', '—', '0.00', '0.00', '0.00'])
+  }
+
   autoTable(doc, {
     startY: y,
     head: [['Date', 'Service', 'Type', 'Status', 'Total', 'Paid', 'Balance']],
@@ -1377,7 +1374,7 @@ export function buildCustomerHistoryDocument(input: CustomerHistoryInput): jsPDF
     columnStyles: {
       0: { cellWidth: 20 },
       1: { cellWidth: 26 },
-      2: { cellWidth: 'auto' },
+      2: { cellWidth: 'auto', overflow: 'linebreak' },
       3: { cellWidth: 24 },
       4: { cellWidth: 24, halign: 'right' },
       5: { cellWidth: 24, halign: 'right' },

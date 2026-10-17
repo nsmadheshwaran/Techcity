@@ -268,8 +268,12 @@ export default function CustomerDetailPage() {
             >
               <Trash2 size={14} /> <span className="sr-only sm:not-sr-only">Delete</span>
             </button>
-            <button className="btn-secondary" onClick={downloadHistory} disabled={!services?.length}>
-              <Download size={14} /> <span className="sr-only sm:not-sr-only">History</span>
+            <button
+              className="btn-secondary text-brand-700 hover:bg-brand-50"
+              onClick={downloadHistory}
+              title="Download customer history statement (PDF)"
+            >
+              <Download size={14} /> <span>Statement (PDF)</span>
             </button>
             <button className="btn-secondary" onClick={() => setEditOpen(true)}>
               <Pencil size={14} /> <span className="sr-only sm:not-sr-only">Edit</span>
@@ -457,6 +461,15 @@ export default function CustomerDetailPage() {
                 </>
               )}
             </dl>
+            <div className="border-t border-ink-200 p-3 bg-ink-50/50">
+              <button
+                type="button"
+                onClick={downloadHistory}
+                className="btn-secondary w-full justify-center text-[13px] text-brand-700 hover:text-brand-800 hover:bg-brand-50"
+              >
+                <Download size={14} /> Download History Statement (PDF)
+              </button>
+            </div>
           </section>
 
           {/* Monthly report */}
