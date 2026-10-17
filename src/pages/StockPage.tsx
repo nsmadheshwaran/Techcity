@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
-import { Boxes, Download, Minus, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Boxes, Minus, Pencil, Plus, Trash2, Upload } from 'lucide-react'
+import { ExportButton } from '@/components/ui/ExportButton'
 import { PageHeader } from '@/components/PageHeader'
 import { ProductFormModal } from '@/components/products/ProductFormModal'
+import { ProductImportModal } from '@/components/products/ProductImportModal'
 import { Chip } from '@/components/ui/Badges'
 import { EmptyState, SkeletonRows } from '@/components/ui/States'
 import { ListToolbar, SearchInput } from '@/components/ui/ListToolbar'
@@ -30,6 +32,7 @@ export default function StockPage() {
   const [query, setQuery] = useState('')
   const [lowOnly, setLowOnly] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [editing, setEditing] = useState<Product | undefined>()
 
   const filtered = useMemo(() => {
@@ -93,20 +96,10 @@ export default function StockPage() {
         subtitle="What is physically on the shelf in the shop."
         actions={
           <>
-            <button
-              className="btn-secondary"
-              onClick={() => onExport('csv')}
-              disabled={!products?.length}
-            >
-              <Download size={16} /> <span className="sr-only sm:not-sr-only">CSV</span>
+            <button className="btn-secondary" onClick={() => setImportOpen(true)}>
+              <Upload size={16} /> <span className="sr-only sm:not-sr-only">Import</span>
             </button>
-            <button
-              className="btn-secondary"
-              onClick={() => onExport('excel')}
-              disabled={!products?.length}
-            >
-              <Download size={16} /> <span className="sr-only sm:not-sr-only">Excel</span>
-            </button>
+            <ExportButton onExport={onExport} disabled={!products?.length} />
             <button
               className="btn-primary"
               onClick={() => {
@@ -358,6 +351,7 @@ export default function StockPage() {
         }}
         product={editing}
       />
+      <ProductImportModal open={importOpen} onClose={() => setImportOpen(false)} />
     </>
   )
 }

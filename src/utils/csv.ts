@@ -59,3 +59,81 @@ export function timestampSuffix(): string {
     d.getMinutes(),
   )}`
 }
+
+/**
+ * Parses CSV text into row objects keyed by the header row. Handles quoted
+ * fields containing commas, embedded newlines and escaped quotes ("") —
+ * the same escaping toCSV() produces, so an exported file always re-imports
+ * correctly, and handles a handwritten/Excel-exported CSV too.
+ */
+export function parseCSV(text: string): Record<string, string>[] {
+  // Strip a UTF-8 BOM, which downloadCSV() writes and Excel also writes.
+  const clean = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text
+
+  const rows: string[][] = []
+  let row: string[] = []
+  let field = ''
+  let inQuotes = false
+  let i = 0
+  const pushField = () => {
+    row.push(field)
+    field = ''
+  }
+  const pushRow = () => {
+    pushField()
+    rows.push(row)
+    row = []
+  }
+
+  while (i < clean.length) {
+    const ch = clean[i]
+    if (inQuotes) {
+      if (ch === '"') {
+        if (clean[i + 1] === '"') {
+          field += '"'
+          i += 2
+          continue
+        }
+        inQuotes = false
+        i++
+        continue
+      }
+      field += ch
+      i++
+      continue
+    }
+    if (ch === '"') {
+      inQuotes = true
+      i++
+      continue
+    }
+    if (ch === ',') {
+      pushField()
+      i++
+      continue
+    }
+    if (ch === '\r') {
+      i++
+      continue
+    }
+    if (ch === '\n') {
+      pushRow()
+      i++
+      continue
+    }
+    field += ch
+    i++
+  }
+  // Final field/row, unless the file ended cleanly on a newline.
+  if (field.length > 0 || row.length > 0) pushRow()
+
+  if (!rows.length) return []
+  const headers = rows[0].map((h) => h.trim())
+  return rows.slice(1).map((r) => {
+    const obj: Record<string, string> = {}
+    headers.forEach((h, idx) => {
+      if (h) obj[h] = (r[idx] ?? '').trim()
+    })
+    return obj
+  })
+}

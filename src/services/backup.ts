@@ -301,6 +301,10 @@ export async function exportPaymentsCSV(format: ExportFormat = 'csv') {
 export async function exportEquipmentCSV(format: ExportFormat = 'csv') {
   const [equipment, customers] = await Promise.all([db.equipment.toArray(), db.customers.toArray()])
   const byId = new Map(customers.map((c) => [c.id, c]))
+  const equipmentById = new Map(equipment.map((e) => [e.id, e]))
+  // Login/password is never exported — a CSV or Excel file gets shared, printed
+  // and emailed far more casually than the app itself, and that is exactly how
+  // a DVR or router password ends up somewhere it shouldn't.
   const rows = equipment.map((e) => ({
     'Product ID': e.code,
     Customer: byId.get(e.customerId)?.name ?? '',
@@ -309,6 +313,7 @@ export async function exportEquipmentCSV(format: ExportFormat = 'csv') {
     Brand: e.brand ?? '',
     Model: e.model ?? '',
     'Serial Number': e.serialNumber ?? '',
+    'Part Of': e.parentEquipmentId ? equipmentById.get(e.parentEquipmentId)?.productType ?? '' : '',
     'Installation Date': e.installationDate ?? '',
     Warranty: e.warrantyPeriod ?? '',
     'Warranty Expiry': e.warrantyExpiry ?? '',
